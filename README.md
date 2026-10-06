@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/Twil3akine/gwitg/releases"><img src="https://img.shields.io/github/v/release/Twil3akine/gwitg" alt="GitHub release"></a>
-  <a href="./SKILL.md"><img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-0b7285" alt="Agent Skill"></a>
+  <a href="https://github.com/Twil3akine/gwitg/releases"><img src="https://img.shields.io/github/release-date/Twil3akine/gwitg" alt="GitHub release date"></a>
 </p>
 
 # gwitg
