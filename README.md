@@ -7,8 +7,8 @@
 </p>
 
 <p align="center">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://github.com/Twil3akine/gwitg/releases"><img src="https://img.shields.io/github/v/release/Twil3akine/gwitg" alt="GitHub release"></a>
-  <a href="https://github.com/Twil3akine/gwitg/releases"><img src="https://img.shields.io/github/release-date/Twil3akine/gwitg" alt="GitHub release date"></a>
 </p>
 
 # gwitg
@@ -220,6 +220,7 @@ gwitgで許可する操作は次の4種類です。
 gwitg/
 ├── assets/
 │   └── gwitg_logo.png
+├── LICENSE
 ├── README.md
 ├── SKILL.md
 ├── scripts/
@@ -228,6 +229,7 @@ gwitg/
     └── test_decision_model.py
 ```
 
+- [LICENSE](LICENSE): MIT License
 - [SKILL.md](SKILL.md): エージェントが従う運用ルール
 - [scripts/decision_model.py](scripts/decision_model.py): decision model設定の解決
 - [tests/test_decision_model.py](tests/test_decision_model.py): 設定解決のテスト
