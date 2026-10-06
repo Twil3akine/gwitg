@@ -323,8 +323,8 @@ A user status request allows a lifecycle check, not progress monitoring or paren
 For suitable work:
 
 1. identify independent tasks;
-2. when delegation is genuinely ambiguous, use the judge selected at task start or judge in the parent;
-3. resolve the explicitly selected worker profile, or `standard` when none was specified, and spawn workers with its configured model and reasoning effort;
+2. when delegation or profile choice is ambiguous, use the judge selected at task start or judge in the parent; skip the judge when both decisions are clear;
+3. select the explicit user profile first, otherwise use an accepted valid judge recommendation, otherwise use `standard`; resolve the selected profile and spawn workers with its configured model and reasoning effort;
 4. allow those workers to recursively delegate independent subtasks when useful;
 5. continue only independent work in each parent;
 6. avoid progress monitoring and polling; use only permitted lifecycle checks and limited corrections or cancellation;

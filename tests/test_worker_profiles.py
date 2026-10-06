@@ -98,11 +98,15 @@ class WorkerProfileTests(unittest.TestCase):
             "strong": {"model": "judge-worker", "reasoning_effort": "high"},
         }
         self.write_common_config(profiles)
-        invalid_judge_result = {"delegate": True, "profile": "strong"}
+        judge_result = {
+            "delegate": True,
+            "profile": "strong",
+            "reason": "The task benefits from a stronger worker",
+        }
 
         self.assertEqual(
             worker_profiles.resolve_worker_profile(
-                "light", self.env, self.cwd, invalid_judge_result
+                "light", self.env, self.cwd, judge_result
             ),
             profiles["light"],
         )
@@ -126,6 +130,24 @@ class WorkerProfileTests(unittest.TestCase):
             {"delegate": True, "profile": "light"},
             {"delegate": False, "profile": "light", "reason": "valid"},
             {"delegate": "true", "profile": "light", "reason": "valid"},
+            {
+                "delegate": True,
+                "profile": "light",
+                "reason": "valid",
+                "model": "6-luna",
+            },
+            {
+                "delegate": True,
+                "profile": "light",
+                "reason": "valid",
+                "reasoning_effort": "high",
+            },
+            {
+                "delegate": True,
+                "profile": "light",
+                "reason": "valid",
+                "fast": True,
+            },
         )
         for judge_result in results:
             with self.subTest(judge_result=judge_result):
@@ -133,6 +155,25 @@ class WorkerProfileTests(unittest.TestCase):
                     worker_profiles.resolve_worker_profile(
                         judge_result=judge_result, environ=self.env, cwd=self.cwd
                     )
+
+    def test_invalid_explicit_profile_does_not_fall_back_to_judge_profile(self):
+        recommended_settings = {"model": "recommended-worker", "reasoning_effort": "low"}
+        self.write_common_config(
+            {
+                "standard": {"model": "default-worker", "reasoning_effort": "high"},
+                "light": recommended_settings,
+            }
+        )
+        judge_result = {
+            "delegate": True,
+            "profile": "light",
+            "reason": "The configured light profile is suitable",
+        }
+
+        with self.assertRaisesRegex(ValueError, "unknown worker profile 'missing'"):
+            worker_profiles.resolve_worker_profile(
+                "missing", self.env, self.cwd, judge_result
+            )
 
     def test_valid_but_unconfigured_judge_profile_is_not_substituted(self):
         self.write_common_config(
