@@ -35,13 +35,13 @@ If a correction or constraint makes the original assignment impossible, the suba
 
 ## Default worker configuration
 
-If the user explicitly selects a worker profile for the task, resolve that profile instead of the default `standard`. When no profile is specified, resolve `standard` with `python3 <skill-directory>/scripts/worker_profiles.py` from the task's working directory. Keep the selected profile name together with its resolved model and reasoning effort for the duration of the task, and pass both to descendants so recursive delegation reuses the same selection and values without rereading configuration. The built-in profile preserves the existing `6-luna` / `high` behavior. Keep `/fast` at the environment default unless the user changes it.
+If the user explicitly selects a worker profile for the task, resolve that profile first. Otherwise, when delegation or profile choice is ambiguous, use a valid common judge result's profile recommendation. If no judge recommendation is needed or available, the parent makes the decision and resolves `standard` when no other profile is selected. An invalid result is unavailable as a whole and requires parent judgment; do not treat it as an implicit `standard` recommendation. Keep the selected profile name together with its resolved model and reasoning effort for the duration of the task, and pass both to descendants so recursive delegation reuses the same selection and values without rereading configuration. The built-in profile preserves the existing `6-luna` / `high` behavior. Keep `/fast` at the environment default unless the user changes it.
 
 Do not silently substitute a different model or reasoning effort when a configured profile is unsupported. Follow explicit user instructions or keep the work in the current agent.
 
 ## Named worker profiles
 
-Worker profiles are names for concrete model and reasoning-effort settings. The built-in profiles are `light`, `standard`, and `strong`; an explicit user selection takes precedence, and omitting a profile selects `standard`, which preserves the existing `6-luna` / `high` behavior. The profile is not inferred from the task, and the delegation judge does not select it. `/fast` is independent of a profile.
+Worker profiles are names for concrete model and reasoning-effort settings. The built-in profiles are `light`, `standard`, and `strong`; precedence is explicit user selection, a valid common judge recommendation when delegation or profile choice is ambiguous, then `standard`. The built-in `standard` profile preserves the existing `6-luna` / `high` behavior. A judge recommends only a profile name; `/fast` is independent of a profile.
 
 The resolver reads `~/.config/gwitg/worker-profiles.json` first, then `<project-root>/.gwitg/worker-profiles.json` when the common file is absent. If neither file exists, it uses the built-in settings below. A custom file replaces the built-in profile list and must have this shape:
 
@@ -55,7 +55,7 @@ The resolver reads `~/.config/gwitg/worker-profiles.json` first, then `<project-
 }
 ```
 
-The resolver returns configured model and effort strings unchanged; it does not return the profile name, so the caller must retain that name alongside the returned settings. It does not replace settings that the runtime may not support. Invalid JSON, missing settings, or an unknown profile produces an error. A caller can resolve an explicit profile with `python3 <skill-directory>/scripts/worker_profiles.py <profile>`; omitting the argument resolves `standard`. If an explicit profile cannot be resolved or the runtime cannot use its model or effort, report the error and do not silently choose another profile or setting. Keep the current task in the parent when the resolved settings are unsupported.
+The resolver returns configured model and effort strings unchanged; it does not return the profile name, so the caller must retain that name alongside the returned settings. It does not guarantee that the runtime supports those settings. Invalid JSON, missing settings, or an unknown profile produces an error. A caller can resolve an explicit profile with `python3 <skill-directory>/scripts/worker_profiles.py <profile>`; omitting the argument resolves `standard`. A programmatic caller can pass a parsed common judge result as `judge_result` to `resolve_worker_profile`. An explicit user profile takes precedence; with no explicit profile, a valid positive recommendation resolves its named profile, a valid negative recommendation returns no worker settings, and no judge result resolves `standard`. An invalid common result raises `InvalidJudgeResult` and must be treated as unavailable as a whole so the parent can decide. A valid recommendation whose profile is not configured raises the normal profile-resolution error. Neither case silently selects another profile. Keep the current task in the parent when the resolved settings are unsupported.
 
 ## Decide whether to delegate
 
@@ -120,7 +120,7 @@ The judge may evaluate:
 
 The judge is advisory. The current agent remains responsible for the final delegation decision.
 
-Do not invoke a judge when delegation is already clearly appropriate or clearly inappropriate.
+Do not invoke a judge when both the delegation decision and profile choice are already clear.
 
 Do not use a judge to monitor a running subagent.
 
@@ -160,7 +160,7 @@ Avoid concurrent edits to the same files or shared mutable state unless responsi
 
 A subagent may spawn its own subagents when its assigned work contains independent subtasks that materially benefit from delegation or parallel execution.
 
-Recursive delegation follows the same gwitg policy and uses the concrete worker settings resolved at the start of the task.
+Recursive delegation follows the same gwitg policy and reuses the selected profile name and concrete worker settings resolved for the current task. It does not reread configuration or ask the judge to reselect a profile for the same task.
 
 A subagent that spawns children must:
 

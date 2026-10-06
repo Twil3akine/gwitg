@@ -49,7 +49,7 @@ gwitgを使ってこの作業を進めて
 
 サブエージェントも、必要に応じて別のサブエージェントに作業を任せられます。その場合も、同じ設定と監視しないルールを適用します。
 
-作業を任せてよいか判断が難しい場合は、次の設定で判断役を選べます。委任が明らかな作業では外部モデルを呼びません。
+委任するか、使うprofileを決めにくい場合は、次の設定で判断役を選べます。委任とprofileの両方が明らかな作業では外部モデルを呼びません。
 
 ### 判断役を選ぶ
 
@@ -111,9 +111,9 @@ Python 3や読み取りスクリプトを利用できない場合は、その事
 
 ### worker profile
 
-worker profileは、作業者のモデルと推理レベルをまとめた名前です。初期プロファイルは`light`、`standard`、`strong`です。ユーザーがprofileを明示した場合はその指定を使い、指定がなければ`standard`を使います。組み込みの`standard`は従来の`6-luna`・`high`を保ちます。タスクの内容からprofileを選ばず、判断役もprofileを選択しません。`/fast`はprofileとは別の設定です。
+worker profileは、作業者のモデルと推理レベルをまとめた名前です。初期プロファイルは`light`、`standard`、`strong`です。選択の優先順位は、ユーザーが明示したprofile、委任またはprofile選択が曖昧な場合に得た有効な共通形式の推薦profile、既定の`standard`です。組み込みの`standard`は従来の`6-luna`・`high`を保ちます。判断役はprofile名だけを推薦し、具体的な設定はworker profileから解決します。`/fast`はprofileとは別の設定です。
 
-親エージェントは、選んだprofile名とresolverが返すモデル・推理レベルを組にして作業中保持し、子へ渡します。再帰委任でもこの組をそのまま引き継ぎます。明示されたprofileやその設定を解決できない場合はエラーとして扱い、別のprofileへ置き換えません。解決したモデルまたは推理レベルを実行環境が利用できない場合は、設定を置き換えずに委任を中止するか、親エージェント自身が作業します。
+親エージェントは、選んだprofile名とresolverが返すモデル・推理レベルを組にして作業中保持し、子へ渡します。再帰委任でもこの組をそのまま引き継ぎます。明示されたprofileや有効な推薦profileを解決できない場合はエラーとして扱い、別のprofileへ置き換えません。共通形式が無効なら結果全体を利用せず、親エージェントが判断します。`delegate: false`はprofileを解決せず、親エージェントが最終判断します。有効な推薦profileの設定を読み込めても、実行環境がそのモデルや推理レベルを実際に利用できるかはresolverでは保証できません。利用できないと分かった場合は設定を置き換えずに委任を中止するか、親エージェント自身が作業します。
 
 profileは共通設定`~/.config/gwitg/worker-profiles.json`、またはプロジェクト設定`.gwitg/worker-profiles.json`で変更できます。共通設定があればそちらを使い、なければプロジェクト設定を使います。どちらもなければ次の組み込み設定を使います。
 
@@ -129,11 +129,13 @@ profileは共通設定`~/.config/gwitg/worker-profiles.json`、またはプロ�
 
 設定ファイルに書いたprofile一覧は組み込み一覧を置き換えます。各profileには`model`と`reasoning_effort`を指定してください。指定された値はそのまま返します。利用できない設定を別のモデルや推理レベルへ置き換えません。JSONや設定項目が不正な場合、または選択したprofileが存在しない場合はエラーになります。
 
-profileを解決するには、次のコマンドにprofile名を渡します。引数を省略すると`standard`を使います。
+選んだprofileの具体的な設定を確認するには、次のコマンドにprofile名を渡します。たとえば判断役の有効な推薦が`light`で、親エージェントが採用した場合は`light`を指定します。引数を省略すると`standard`を使います。
 
 ```sh
-python3 /path/to/gwitg/scripts/worker_profiles.py [light|standard|strong]
+python3 /path/to/gwitg/scripts/worker_profiles.py light
 ```
+
+プログラムから共通形式を扱う場合は、解析済みの辞書を`resolve_worker_profile(judge_result=...)`へ渡せます。ユーザーがprofileを明示したときは、そのprofile引数を優先し、判断役の結果は参照しません。有効な`delegate: false`ならworker設定を解決せず、無効な結果は`InvalidJudgeResult`、有効でも未設定のprofile名は通常のprofile解決エラーになります。どちらも既定profileへ黙って切り替えません。
 
 ### 実行中のサブエージェントを操作する
 
