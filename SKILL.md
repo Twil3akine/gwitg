@@ -1,6 +1,6 @@
 ---
 name: gwitg
-description: Orchestrate suitable independent work with parallel 6-luna high subagents, leave running subagents completely unmonitored until terminal completion or failure, and preserve limited direct user control through /subagent. Use Jev or Clef-flah-q4 when useful to judge whether work is appropriate to delegate.
+description: Orchestrate suitable independent work with parallel 6-luna high subagents, avoid polling and progress monitoring of running subagents, and preserve limited direct user control through /subagent. Select an optional delegation judge through the external decision-model setting.
 ---
 
 # gwitg
@@ -11,30 +11,27 @@ The default worker is **6-luna with high reasoning effort**.
 
 This policy applies recursively: a subagent that delegates work becomes the parent of its own children and must follow the same rules.
 
-## Core rule: spawn and leave alone
+## Core rule: delegate without progress monitoring
 
-After assigning work to a subagent, do not inspect that subagent again until one of these terminal events occurs:
+After assigning work, let the subagent work independently. Occasional checks of lifecycle state (running, completed, failed, interrupted, or unavailable) are allowed when needed for coordination or a user status request.
 
-1. the subagent reports completion;
-2. the runtime explicitly reports failure, interruption, or unavailability.
+Do not repeatedly query status at short intervals, alternate sleep and status calls to watch for completion, request progress updates, inspect partial output or intermediate logs, or open a running thread merely to monitor progress. Prefer passive completion or failure notifications when available. Waiting for such notifications is allowed and is not a status check.
 
-Silence, elapsed time, or apparent lack of activity is not evidence of failure.
-
-While a subagent is running, its parent must not:
-
-- poll its status;
-- request a progress update;
-- inspect partial output;
-- inspect intermediate logs;
-- open its thread merely to see progress;
-- repeatedly call status, list, retrieve, or equivalent inspection operations;
-- sleep and then check again;
-- interrupt, restart, accelerate, replace, or otherwise reconfigure it because it appears slow;
-- duplicate its delegated work solely to verify that progress is being made.
-
-A parent may passively await a terminal completion or failure event when the runtime supports that behavior. Waiting must not be implemented as repeated progress checks.
+Silence, elapsed time, or apparent lack of activity is not evidence of failure. Do not accelerate, restart, replace, or reconfigure a worker merely because it appears slow. Do not duplicate delegated work solely to check that progress is being made.
 
 The parent is an orchestrator, not a progress monitor.
+
+## Limited corrections and cancellation
+
+While a subagent is running, its parent may send only:
+
+- a correction to a false premise;
+- a newly discovered constraint relevant to the assigned task;
+- an instruction to stop the assigned work.
+
+These exceptions do not permit ordinary additional tasks, changes to the objective or deliverable, or changes to the work strategy. Do not use a new constraint as a pretext to expand scope. Keep the message limited to the correction, constraint, or cancellation; do not request a progress report in the same message.
+
+If a correction or constraint makes the original assignment impossible, the subagent should stop and report the reason rather than invent a replacement assignment. Cancellation may use the runtime's interruption mechanism when needed. Stopping does not authorize restarting or replacing the worker without an appropriate new assignment.
 
 ## Default worker configuration
 
@@ -80,7 +77,23 @@ Keep work in the current agent when it requires:
 
 ## Delegation judge
 
-When it is genuinely unclear whether work is appropriate for a subagent, the current agent may use **Jev** or **Clef-flah-q4** as a lightweight delegation judge if available.
+At the start of each user task using this skill, select the delegation judge once as follows:
+
+1. An explicit user selection of `clef`, `jev`, or `none` for this task takes precedence.
+2. Otherwise, run `python3 <skill-directory>/scripts/decision_model.py` using this skill's actual directory. It reads `$XDG_CONFIG_HOME/gwitg/decision-model`, or `~/.config/gwitg/decision-model` when XDG_CONFIG_HOME is unset or empty.
+3. The file contains exactly one lowercase value: `clef`, `jev`, or `none`, with optional surrounding whitespace. A missing file selects `none`. A blank, invalid, unreadable, or non-UTF-8 file is an error. XDG_CONFIG_HOME, when set, must be absolute.
+
+Retain the selection in the task context and reuse it for all delegation judgments within that task. Pass the selection to subagents in their delegation prompts so descendants do not reread the setting for the same task. Changes to the file take effect at the start of the next user task, not during the current task. A continuation or status question does not start a new task. An explicit user selection during the task overrides the retained selection without rereading the file. Do not persist the selection across separate user tasks or run a resident process.
+
+Never create or modify the user's setting as part of reading it. If the resolver or Python is unavailable, or reading the setting fails, disclose that limitation once and retain `none` for the task; do not retry the resolver for each decision.
+
+- `clef`: use the available Clef delegation-judgment tool or connection (called Clef-flah-q4 in v1.0).
+- `jev`: use the available Jev delegation-judgment tool or connection.
+- `none`: make the judgment in the current agent without an external decision model.
+
+Selection does not provision an API connection, install a model, or choose the worker model. Check that the selected judge has an actual callable tool or connection. If it is unavailable or its call fails, report the limitation and judge in the current agent; do not silently substitute the other external judge. Do not invent tool names, API endpoints, or model identifiers.
+
+The delegation judge is distinct from the worker. Keep the existing `6-luna` / `high` worker default regardless of the judge selection.
 
 The judge may evaluate:
 
@@ -122,7 +135,7 @@ A subagent that spawns children must:
 - delegate only independent, bounded subtasks;
 - prefer parallel execution when dependencies allow it;
 - provide each child enough context to finish independently;
-- not inspect a running child before a terminal completion or failure event;
+- apply the same lifecycle-check, correction, cancellation, and no-polling rules to its children;
 - avoid conflicting edits or shared mutable state;
 - integrate completed child results before reporting completion to its own parent.
 
@@ -177,40 +190,25 @@ User intervention is limited to these actions:
 - enable or disable `/fast`;
 - change its model or reasoning effort.
 
-No other user intervention is part of this policy.
+Other permitted interventions are the limited corrections and cancellation described above, delivered through the parent. Ordinary additional task instructions remain prohibited.
 
-In particular, do not treat the following as allowed gwitg interventions:
-
-- replacing the subagent with another agent;
-- stopping or resuming it;
-- sending additional task instructions to change its ongoing work.
+Do not treat replacing a running subagent, resuming canceled work, or changing its objective or strategy as permitted interventions under these exceptions.
 
 These controls apply to descendants as well as direct children.
 
 The user's direct `/subagent` changes take effect as supported by the runtime and must not be undone by an agent.
 
-## No parent-mediated intervention
+## Parent-mediated intervention boundaries
 
-An agent must not proxy `/subagent` intervention for the user.
+The parent may check lifecycle state and relay a correction, newly discovered constraint, or cancellation within the rules above, including at the user's request.
 
-Even when explicitly asked, the parent must not inspect or reconfigure a running child on the user's behalf.
-
-This includes:
-
-- checking its current progress or state;
-- opening or reading its running thread;
-- enabling or disabling `/fast`;
-- changing its model;
-- changing reasoning effort;
-- replacing it with another agent.
-
-If the user wants one of the permitted direct controls, identify the relevant worker name if necessary and leave the actual action to the user through `/subagent`.
+The parent must not proxy opening a running thread, toggling `/fast`, changing the model or reasoning effort, or replacing a running worker. For those permitted direct configuration controls, identify the worker name and let the user act through `/subagent`.
 
 ## Bottlenecks
 
 A slow worker is not automatically a failed worker.
 
-The parent must not inspect, accelerate, restart, replace, or reconfigure a worker merely because it appears to be the bottleneck.
+Do not use apparent slowness as a reason to monitor progress, accelerate, restart, replace, or reconfigure a worker. Occasional lifecycle checks remain subject to the no-polling rule; limited corrections and cancellation remain permitted for their stated purposes.
 
 If the user identifies a bottleneck, the user may directly use `/subagent` for the permitted controls:
 
@@ -232,9 +230,22 @@ The parent may:
 - prepare integration work that does not depend on intermediate worker state;
 - respond to the user.
 
-If no independent work remains, leave the workers alone until a terminal event arrives.
+If no independent work remains, prefer passive waiting for a terminal event. Do not fill the wait with repeated lifecycle checks.
 
 Do not manufacture progress checks to fill idle time.
+
+## Investigation reports
+
+When relevant, a completed investigation should include:
+
+- what was checked;
+- when the check was performed and what time the evidence describes;
+- whether the finding was directly observed in the current state or came from a document or historical log;
+- unverified items and limitations.
+
+For time-sensitive investigations, distinguish currently observed facts from historical recorded facts. Reading a document today does not make its contents current. If the evidence time is unknown, say so rather than guessing.
+
+Use only the relevant fields for simple code investigations; a long fixed template is not required.
 
 ## Completion
 
@@ -252,7 +263,7 @@ A subagent with children must integrate the completed child results before repor
 
 ## Failure handling
 
-React to an explicit runtime failure, interruption, or unavailable-agent notification.
+React to an explicit runtime failure, interruption, or unavailable-agent notification, or the same terminal state established by a permitted lifecycle check.
 
 Depending on the failure reason, the parent may:
 
@@ -260,7 +271,7 @@ Depending on the failure reason, the parent may:
 - delegate it again;
 - perform the work itself.
 
-Failure handling begins only after an explicit terminal failure signal.
+Failure handling begins only after a terminal failure state is established. A requested cancellation is a stop instruction, not evidence of runtime failure.
 
 Never infer failure solely from elapsed time, silence, or lack of intermediate output.
 
@@ -268,21 +279,21 @@ Never infer failure solely from elapsed time, silence, or lack of intermediate o
 
 Apply these rules in this order:
 
-1. explicit direct user action through `/subagent` within the allowed controls;
-2. explicit runtime completion or failure events;
-3. the normal gwitg hands-off policy.
+1. explicit user instructions, including permitted corrections, constraints, and cancellation;
+2. explicit runtime terminal events or a terminal state established by a permitted lifecycle check;
+3. the normal no-polling and intervention-boundary rules.
 
-A user request sent to the parent does not authorize parent-mediated inspection or reconfiguration of a running subagent.
+A user status request allows a lifecycle check, not progress monitoring or parent-mediated reconfiguration.
 
 ## Normal flow
 
 For suitable work:
 
 1. identify independent tasks;
-2. use Jev or Clef-flah-q4 only when delegation is genuinely ambiguous;
+2. when delegation is genuinely ambiguous, use the judge selected at task start or judge in the parent;
 3. spawn `6-luna` high workers in parallel;
 4. allow those workers to recursively delegate independent subtasks when useful;
 5. continue only independent work in each parent;
-6. do not inspect running children;
+6. avoid progress monitoring and polling; use only permitted lifecycle checks and limited corrections or cancellation;
 7. let the user directly use `/subagent` for the limited permitted controls;
 8. integrate results only after completion.
