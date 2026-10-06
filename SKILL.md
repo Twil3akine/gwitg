@@ -35,13 +35,13 @@ If a correction or constraint makes the original assignment impossible, the suba
 
 ## Default worker configuration
 
-At task start, resolve the `standard` profile with `python3 <skill-directory>/scripts/worker_profiles.py` from the task's working directory. Use its configured model and reasoning effort for workers created during that task, including recursive delegation. Pass the resolved settings to descendants so they reuse them without rereading configuration. The built-in profile preserves the existing `6-luna` / `high` behavior. Keep `/fast` at the environment default unless the user changes it.
+If the user explicitly selects a worker profile for the task, resolve that profile instead of the default `standard`. When no profile is specified, resolve `standard` with `python3 <skill-directory>/scripts/worker_profiles.py` from the task's working directory. Keep the selected profile name together with its resolved model and reasoning effort for the duration of the task, and pass both to descendants so recursive delegation reuses the same selection and values without rereading configuration. The built-in profile preserves the existing `6-luna` / `high` behavior. Keep `/fast` at the environment default unless the user changes it.
 
 Do not silently substitute a different model or reasoning effort when a configured profile is unsupported. Follow explicit user instructions or keep the work in the current agent.
 
 ## Named worker profiles
 
-Worker profiles are names for concrete model and reasoning-effort settings. The built-in profiles are `light`, `standard`, and `strong`; omitting a profile selects `standard`, which preserves the existing `6-luna` / `high` behavior. The profile is not inferred from the task, and the delegation judge does not select it. `/fast` is independent of a profile.
+Worker profiles are names for concrete model and reasoning-effort settings. The built-in profiles are `light`, `standard`, and `strong`; an explicit user selection takes precedence, and omitting a profile selects `standard`, which preserves the existing `6-luna` / `high` behavior. The profile is not inferred from the task, and the delegation judge does not select it. `/fast` is independent of a profile.
 
 The resolver reads `~/.config/gwitg/worker-profiles.json` first, then `<project-root>/.gwitg/worker-profiles.json` when the common file is absent. If neither file exists, it uses the built-in settings below. A custom file replaces the built-in profile list and must have this shape:
 
@@ -55,7 +55,7 @@ The resolver reads `~/.config/gwitg/worker-profiles.json` first, then `<project-
 }
 ```
 
-The resolver returns configured model and effort strings unchanged. It does not replace settings that the runtime may not support. Invalid JSON, missing settings, or an unknown profile produces an error. A caller can resolve an explicit profile with `python3 <skill-directory>/scripts/worker_profiles.py <profile>`; omitting the argument resolves `standard`.
+The resolver returns configured model and effort strings unchanged; it does not return the profile name, so the caller must retain that name alongside the returned settings. It does not replace settings that the runtime may not support. Invalid JSON, missing settings, or an unknown profile produces an error. A caller can resolve an explicit profile with `python3 <skill-directory>/scripts/worker_profiles.py <profile>`; omitting the argument resolves `standard`. If an explicit profile cannot be resolved or the runtime cannot use its model or effort, report the error and do not silently choose another profile or setting. Keep the current task in the parent when the resolved settings are unsupported.
 
 ## Decide whether to delegate
 
@@ -306,7 +306,7 @@ For suitable work:
 
 1. identify independent tasks;
 2. when delegation is genuinely ambiguous, use the judge selected at task start or judge in the parent;
-3. resolve the default `standard` worker profile and spawn workers with its configured model and reasoning effort;
+3. resolve the explicitly selected worker profile, or `standard` when none was specified, and spawn workers with its configured model and reasoning effort;
 4. allow those workers to recursively delegate independent subtasks when useful;
 5. continue only independent work in each parent;
 6. avoid progress monitoring and polling; use only permitted lifecycle checks and limited corrections or cancellation;
