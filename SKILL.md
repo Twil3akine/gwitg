@@ -7,7 +7,7 @@ description: Orchestrate suitable independent work with parallel 6-luna high sub
 
 Use subagents for independent work that can be completed without frequent synchronization with the current agent.
 
-The default worker is **6-luna with high reasoning effort**.
+The default worker profile is **standard**.
 
 This policy applies recursively: a subagent that delegates work becomes the parent of its own children and must follow the same rules.
 
@@ -35,13 +35,27 @@ If a correction or constraint makes the original assignment impossible, the suba
 
 ## Default worker configuration
 
-When spawning a worker, use:
+When spawning a worker without an explicitly selected profile, use the `standard` profile. Its built-in model and reasoning effort preserve the existing `6-luna` / `high` behavior. Keep `/fast` at the environment default unless the user changes it.
 
-- model: `6-luna`;
-- reasoning effort: `high`;
-- Fast mode: environment default.
+Do not silently substitute a different model or reasoning effort when a configured profile is unsupported. Follow explicit user instructions or keep the work in the current agent.
 
-If the environment does not support selecting `6-luna` with high reasoning effort, do not silently substitute another worker configuration. Follow explicit user instructions or keep the work in the current agent.
+## Named worker profiles
+
+Worker profiles are names for concrete model and reasoning-effort settings. The built-in profiles are `light`, `standard`, and `strong`; omitting a profile selects `standard`, which preserves the existing `6-luna` / `high` behavior. Profiles are not selected automatically and do not involve the delegation judge. `/fast` is independent of a profile.
+
+The resolver reads `~/.config/gwitg/worker-profiles.json` first, then `<project-root>/.gwitg/worker-profiles.json` when the common file is absent. If neither file exists, it uses the built-in settings below. A custom file replaces the built-in profile list and must have this shape:
+
+```json
+{
+  "profiles": {
+    "light": {"model": "6-luna", "reasoning_effort": "low"},
+    "standard": {"model": "6-luna", "reasoning_effort": "high"},
+    "strong": {"model": "6-astra", "reasoning_effort": "high"}
+  }
+}
+```
+
+The resolver returns configured model and effort strings unchanged. It does not replace settings that the runtime may not support. Invalid JSON, missing settings, or an unknown profile produces an error. A caller can resolve an explicit profile with `python3 <skill-directory>/scripts/worker_profiles.py <profile>`; omitting the argument resolves `standard`.
 
 ## Decide whether to delegate
 

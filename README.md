@@ -93,6 +93,30 @@ python3 /path/to/gwitg/scripts/decision_model.py
 
 Python 3や読み取りスクリプトを利用できない場合は、その事情を伝えて親エージェントが判断します。
 
+### worker profile
+
+worker profileは、作業者のモデルと推理レベルをまとめた名前です。初期プロファイルは`light`、`standard`、`strong`で、profileを指定しない場合は`standard`を使います。既定値では`standard`が現在の`6-luna`・`high`の動作を保ちます。これらのprofileは自動で選ばれず、判断役の選択にも使いません。`/fast`はprofileとは別の設定です。
+
+profileは共通設定`~/.config/gwitg/worker-profiles.json`、またはプロジェクト設定`.gwitg/worker-profiles.json`で変更できます。共通設定があればそちらを使い、なければプロジェクト設定を使います。どちらもなければ次の組み込み設定を使います。
+
+```json
+{
+  "profiles": {
+    "light": {"model": "6-luna", "reasoning_effort": "low"},
+    "standard": {"model": "6-luna", "reasoning_effort": "high"},
+    "strong": {"model": "6-astra", "reasoning_effort": "high"}
+  }
+}
+```
+
+設定ファイルに書いたprofile一覧は組み込み一覧を置き換えます。各profileには`model`と`reasoning_effort`を指定してください。指定された値はそのまま返します。利用できない設定を別のモデルや推理レベルへ置き換えません。JSONや設定項目が不正な場合、または選択したprofileが存在しない場合はエラーになります。
+
+profileを解決するには、次のコマンドにprofile名を渡します。引数を省略すると`standard`を使います。
+
+```sh
+python3 /path/to/gwitg/scripts/worker_profiles.py [light|standard|strong]
+```
+
 ### 実行中のサブエージェントを操作する
 
 ユーザーが実行中のサブエージェントを確認・操作する場合は、`/subagent`を直接使ってください。`gwitg`のルールで認める操作は、次の4種類です。
@@ -111,9 +135,11 @@ gwitg/
 ├── README.md
 ├── SKILL.md
 ├── scripts/
-│   └── decision_model.py
+│   ├── decision_model.py
+│   └── worker_profiles.py
 └── tests/
-    └── test_decision_model.py
+    ├── test_decision_model.py
+    └── test_worker_profiles.py
 ```
 
 [SKILL.md](SKILL.md)に、エージェントが従う運用ルールを定義しています。
