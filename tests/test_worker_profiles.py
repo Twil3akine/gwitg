@@ -1,6 +1,9 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -89,6 +92,24 @@ class WorkerProfileTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "unknown worker profile"):
             self.resolve("standard")
+
+    def test_cli_imports_resolver_outside_repository(self):
+        profiles = {
+            "standard": {"model": "custom-worker", "reasoning_effort": "medium"}
+        }
+        self.write_project_config(profiles)
+        env = os.environ.copy()
+        env.update(self.env)
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "standard"],
+            cwd=self.cwd,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        self.assertEqual(json.loads(result.stdout), profiles["standard"])
+        self.assertEqual(result.stderr, "")
 
 
 if __name__ == "__main__":

@@ -2,9 +2,9 @@
 """Resolve named worker profiles to concrete model and reasoning settings."""
 
 import json
+import importlib.util
 import os
 from pathlib import Path
-import subprocess
 import sys
 
 
@@ -16,29 +16,20 @@ DEFAULT_PROFILES = {
 }
 
 
+# Reuse the repository-root lookup already used by the delegation-judge resolver.
+_DECISION_MODEL_PATH = Path(__file__).with_name("decision_model.py")
+_DECISION_MODEL_SPEC = importlib.util.spec_from_file_location(
+    "gwitg_decision_model", _DECISION_MODEL_PATH
+)
+_DECISION_MODEL = importlib.util.module_from_spec(_DECISION_MODEL_SPEC)
+_DECISION_MODEL_SPEC.loader.exec_module(_DECISION_MODEL)
+project_root = _DECISION_MODEL.project_root
+
+
 def common_config_path(environ=None):
     env = os.environ if environ is None else environ
     home = Path(env["HOME"]) if env.get("HOME") else Path.home()
     return home / ".config" / "gwitg" / "worker-profiles.json"
-
-
-def project_root(cwd=None):
-    working_directory = Path.cwd() if cwd is None else Path(cwd)
-    working_directory = working_directory.resolve()
-    git_env = os.environ.copy()
-    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"):
-        git_env.pop(name, None)
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(working_directory), "rev-parse", "--show-toplevel"],
-            check=True,
-            capture_output=True,
-            text=True,
-            env=git_env,
-        )
-    except (OSError, subprocess.SubprocessError, UnicodeError):
-        return working_directory
-    return Path(result.stdout.rstrip("\r\n"))
 
 
 def project_config_path(cwd=None):

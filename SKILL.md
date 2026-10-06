@@ -1,6 +1,6 @@
 ---
 name: gwitg
-description: Orchestrate suitable independent work with parallel 6-luna high subagents, avoid polling and progress monitoring of running subagents, and preserve limited direct user control through /subagent. Select an optional delegation judge through the external decision-model setting.
+description: Orchestrate suitable independent work with parallel workers configured by named profiles, avoid polling and progress monitoring of running subagents, and preserve limited direct user control through /subagent. Select an optional delegation judge through the external decision-model setting.
 ---
 
 # gwitg
@@ -35,13 +35,13 @@ If a correction or constraint makes the original assignment impossible, the suba
 
 ## Default worker configuration
 
-When spawning a worker without an explicitly selected profile, use the `standard` profile. Its built-in model and reasoning effort preserve the existing `6-luna` / `high` behavior. Keep `/fast` at the environment default unless the user changes it.
+At task start, resolve the `standard` profile with `python3 <skill-directory>/scripts/worker_profiles.py` from the task's working directory. Use its configured model and reasoning effort for workers created during that task, including recursive delegation. Pass the resolved settings to descendants so they reuse them without rereading configuration. The built-in profile preserves the existing `6-luna` / `high` behavior. Keep `/fast` at the environment default unless the user changes it.
 
 Do not silently substitute a different model or reasoning effort when a configured profile is unsupported. Follow explicit user instructions or keep the work in the current agent.
 
 ## Named worker profiles
 
-Worker profiles are names for concrete model and reasoning-effort settings. The built-in profiles are `light`, `standard`, and `strong`; omitting a profile selects `standard`, which preserves the existing `6-luna` / `high` behavior. Profiles are not selected automatically and do not involve the delegation judge. `/fast` is independent of a profile.
+Worker profiles are names for concrete model and reasoning-effort settings. The built-in profiles are `light`, `standard`, and `strong`; omitting a profile selects `standard`, which preserves the existing `6-luna` / `high` behavior. The profile is not inferred from the task, and the delegation judge does not select it. `/fast` is independent of a profile.
 
 The resolver reads `~/.config/gwitg/worker-profiles.json` first, then `<project-root>/.gwitg/worker-profiles.json` when the common file is absent. If neither file exists, it uses the built-in settings below. A custom file replaces the built-in profile list and must have this shape:
 
@@ -108,7 +108,7 @@ Never create or modify the user's setting as part of reading it. If the resolver
 
 Selection does not provision an API connection, install a model, or choose the worker model. Check that the selected judge has an actual callable tool or connection. If it is unavailable or its call fails, report the limitation and judge in the current agent; do not silently substitute the other external judge. Do not invent tool names, API endpoints, or model identifiers.
 
-The delegation judge is distinct from the worker. Keep the existing `6-luna` / `high` worker default regardless of the judge selection.
+The delegation judge is distinct from the worker profile. Resolving the default worker profile does not change according to the judge selection.
 
 The judge may evaluate:
 
@@ -142,11 +142,11 @@ Avoid concurrent edits to the same files or shared mutable state unless responsi
 
 A subagent may spawn its own subagents when its assigned work contains independent subtasks that materially benefit from delegation or parallel execution.
 
-Recursive delegation follows the same gwitg policy as root-level delegation.
+Recursive delegation follows the same gwitg policy and uses the concrete worker settings resolved at the start of the task.
 
 A subagent that spawns children must:
 
-- use `6-luna` with high reasoning effort by default;
+- use the task's resolved worker model and reasoning effort;
 - delegate only independent, bounded subtasks;
 - prefer parallel execution when dependencies allow it;
 - provide each child enough context to finish independently;
@@ -306,7 +306,7 @@ For suitable work:
 
 1. identify independent tasks;
 2. when delegation is genuinely ambiguous, use the judge selected at task start or judge in the parent;
-3. spawn `6-luna` high workers in parallel;
+3. resolve the default `standard` worker profile and spawn workers with its configured model and reasoning effort;
 4. allow those workers to recursively delegate independent subtasks when useful;
 5. continue only independent work in each parent;
 6. avoid progress monitoring and polling; use only permitted lifecycle checks and limited corrections or cancellation;
