@@ -57,11 +57,20 @@ class WorkerProfileTests(unittest.TestCase):
     def test_configured_profiles_resolve_to_concrete_settings(self):
         profiles = {
             "standard": {"model": "custom-worker", "reasoning_effort": "medium"},
-            "fast-task": {"model": "custom-worker-v2", "reasoning_effort": "xhigh"},
+            "light": {"model": "custom-worker-v2", "reasoning_effort": "low"},
         }
         self.write_common_config(profiles)
         self.assertEqual(self.resolve(), profiles["standard"])
-        self.assertEqual(self.resolve("fast-task"), profiles["fast-task"])
+
+    def test_explicit_profile_takes_precedence_over_standard_default(self):
+        profiles = {
+            "standard": {"model": "default-worker", "reasoning_effort": "high"},
+            "light": {"model": "selected-worker", "reasoning_effort": "low"},
+        }
+        self.write_common_config(profiles)
+        selected_profile = "light"
+
+        self.assertEqual(self.resolve(selected_profile), profiles[selected_profile])
 
     def test_common_configuration_precedes_project_configuration(self):
         self.write_common_config(
