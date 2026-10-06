@@ -1,5 +1,7 @@
 # gwitg
 
+![gwitg logo](assets/gwitg_logo_on_white.png)
+
 `gwitg`は、Codexが独立した作業をサブエージェントに並列で任せるためのAgent Skillです。サブエージェントは、親エージェントから作業を任されて動く別のエージェントです。
 
 基本方針は、**作業を任せたら進捗を監視せず、状態確認のポーリングをしない**ことです。親エージェントは、その間に独立した別の作業を進められます。詳しいルールは[SKILL.md](SKILL.md)に記載しています。
@@ -104,12 +106,25 @@ Python 3や読み取りスクリプトを利用できない場合は、その事
 
 親エージェントは、ポーリングにならない状態確認と、上記の訂正・制約追加・中止を伝えられます。スレッド閲覧、`/fast`やモデル・推理レベルの変更は代行しません。実行中のエージェントの差し替えや、中止した作業の再開、目的・作業方針を変える追加指示は、これらの例外に含めません。
 
+## ロゴ
+
+READMEには、採択済みロゴに白い背景を付けた[表示用画像](assets/gwitg_logo_on_white.png)を掲載しています。透明背景の原本と派生素材の使い分け、最小サイズ、再生成方法は[assets/README.md](assets/README.md)に記載しています。
+
+GitHubのSocial Previewには[assets/gwitg_social_preview.png](assets/gwitg_social_preview.png)を使えます。リポジトリ設定への登録は、GitHubのSettingsから行ってください。
+
 ## ファイル構成
 
 ```text
 gwitg/
 ├── README.md
 ├── SKILL.md
+├── assets/
+│   ├── gwitg_logo.png
+│   ├── gwitg_logo_on_white.png
+│   ├── gwitg_mark_on_white.png
+│   ├── gwitg_social_preview.png
+│   ├── build_assets.sh
+│   └── README.md
 ├── scripts/
 │   └── decision_model.py
 └── tests/
