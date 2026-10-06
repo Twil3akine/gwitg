@@ -16,6 +16,10 @@ DEFAULT_PROFILES = {
 }
 
 
+class InvalidJudgeResult(ValueError):
+    """The judge result does not match the common result contract."""
+
+
 # Reuse the repository-root lookup already used by the delegation-judge resolver.
 _DECISION_MODEL_PATH = Path(__file__).with_name("decision_model.py")
 _DECISION_MODEL_SPEC = importlib.util.spec_from_file_location(
@@ -78,13 +82,24 @@ def read_profiles(environ=None, cwd=None):
     return _validate_profiles(document["profiles"], str(path))
 
 
-def resolve_worker_profile(profile=None, environ=None, cwd=None):
+def resolve_worker_profile(profile=None, environ=None, cwd=None, judge_result=None):
     """Return the concrete settings for profile, defaulting to standard.
+
+    An explicit profile takes precedence over a judge result. Without an
+    explicit profile, a valid positive judge recommendation selects its
+    configured profile. A valid negative recommendation returns None. An
+    absent judge result uses the standard profile.
 
     Custom model and effort strings are returned unchanged. This resolver does
     not select a fallback for configurations the runtime may not support.
     """
-    selected = DEFAULT_PROFILE if profile is None else profile
+    selected = profile
+    if selected is None and judge_result is not None:
+        selected = _recommended_profile(judge_result)
+        if selected is None:
+            return None
+    if selected is None:
+        selected = DEFAULT_PROFILE
     if not isinstance(selected, str) or not selected:
         raise ValueError("profile must be a non-empty string")
     profiles = read_profiles(environ, cwd)
@@ -95,6 +110,32 @@ def resolve_worker_profile(profile=None, environ=None, cwd=None):
         raise ValueError(
             f"unknown worker profile {selected!r}; available profiles: {available}"
         ) from error
+
+
+def _recommended_profile(result):
+    """Validate a common judge result and return its profile recommendation."""
+    if not isinstance(result, dict) or set(result) != {"delegate", "profile", "reason"}:
+        raise InvalidJudgeResult(
+            "judge result must contain only delegate, profile, and reason"
+        )
+    delegate = result["delegate"]
+    profile = result["profile"]
+    reason = result["reason"]
+    if type(delegate) is not bool:
+        raise InvalidJudgeResult("judge result delegate must be a boolean")
+    if not isinstance(reason, str) or not reason.strip():
+        raise InvalidJudgeResult("judge result reason must be a non-empty string")
+    if delegate:
+        if not isinstance(profile, str) or not profile:
+            raise InvalidJudgeResult(
+                "judge result profile must be a non-empty string when delegate is true"
+            )
+        return profile
+    if profile is not None:
+        raise InvalidJudgeResult(
+            "judge result profile must be null when delegate is false"
+        )
+    return None
 
 
 def main():

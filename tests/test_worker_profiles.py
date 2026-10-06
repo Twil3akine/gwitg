@@ -72,6 +72,85 @@ class WorkerProfileTests(unittest.TestCase):
 
         self.assertEqual(self.resolve(selected_profile), profiles[selected_profile])
 
+    def test_judge_recommendation_resolves_the_configured_profile(self):
+        profiles = {
+            "standard": {"model": "default-worker", "reasoning_effort": "high"},
+            "light": {"model": "recommended-worker", "reasoning_effort": "low"},
+        }
+        self.write_common_config(profiles)
+        judge_result = {
+            "delegate": True,
+            "profile": "light",
+            "reason": "The work is independent and bounded",
+        }
+
+        self.assertEqual(
+            worker_profiles.resolve_worker_profile(
+                judge_result=judge_result, environ=self.env, cwd=self.cwd
+            ),
+            profiles["light"],
+        )
+
+    def test_explicit_profile_precedes_judge_recommendation(self):
+        profiles = {
+            "standard": {"model": "default-worker", "reasoning_effort": "high"},
+            "light": {"model": "explicit-worker", "reasoning_effort": "low"},
+            "strong": {"model": "judge-worker", "reasoning_effort": "high"},
+        }
+        self.write_common_config(profiles)
+        invalid_judge_result = {"delegate": True, "profile": "strong"}
+
+        self.assertEqual(
+            worker_profiles.resolve_worker_profile(
+                "light", self.env, self.cwd, invalid_judge_result
+            ),
+            profiles["light"],
+        )
+
+    def test_negative_judge_recommendation_does_not_resolve_a_worker(self):
+        judge_result = {
+            "delegate": False,
+            "profile": None,
+            "reason": "The parent should keep the task",
+        }
+
+        self.assertIsNone(
+            worker_profiles.resolve_worker_profile(
+                judge_result=judge_result, environ=self.env, cwd=self.cwd
+            )
+        )
+
+    def test_invalid_judge_result_is_rejected_as_a_whole(self):
+        results = (
+            {"delegate": True, "profile": "light", "reason": " ", "extra": 1},
+            {"delegate": True, "profile": "light"},
+            {"delegate": False, "profile": "light", "reason": "valid"},
+            {"delegate": "true", "profile": "light", "reason": "valid"},
+        )
+        for judge_result in results:
+            with self.subTest(judge_result=judge_result):
+                with self.assertRaises(worker_profiles.InvalidJudgeResult):
+                    worker_profiles.resolve_worker_profile(
+                        judge_result=judge_result, environ=self.env, cwd=self.cwd
+                    )
+
+    def test_valid_but_unconfigured_judge_profile_is_not_substituted(self):
+        self.write_common_config(
+            {"standard": {"model": "default-worker", "reasoning_effort": "high"}}
+        )
+        judge_result = {
+            "delegate": True,
+            "profile": "missing",
+            "reason": "A configured profile should be used",
+        }
+
+        with self.assertRaises(ValueError) as error:
+            worker_profiles.resolve_worker_profile(
+                judge_result=judge_result, environ=self.env, cwd=self.cwd
+            )
+        self.assertNotIsInstance(error.exception, worker_profiles.InvalidJudgeResult)
+        self.assertIn("unknown worker profile 'missing'", str(error.exception))
+
     def test_common_configuration_precedes_project_configuration(self):
         self.write_common_config(
             {"standard": {"model": "common", "reasoning_effort": "high"}}
