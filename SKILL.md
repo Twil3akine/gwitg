@@ -110,6 +110,24 @@ Do not invoke a judge when delegation is already clearly appropriate or clearly 
 
 Do not use a judge to monitor a running subagent.
 
+## Common judge result format
+
+Interpret every judge's recommendation through the same three-field result, regardless of the judge or its connection:
+
+```yaml
+delegate: true
+profile: light
+reason: Independent repository search with bounded scope
+```
+
+- `delegate` is required and must be a boolean. `true` recommends delegation; `false` does not.
+- `profile` is required. When `delegate` is `true`, it must be a worker profile name. When `delegate` is `false`, it must be `null`. The name is an identifier to resolve through worker-profile configuration; the judge does not define profiles or choose concrete worker settings.
+- `reason` is required and must be a non-empty short string.
+
+A missing field, wrong value type, empty reason, inconsistent `delegate` and `profile` values, or undefined field makes the result invalid. Do not use only part of an invalid result. Treat it as unavailable and let the parent agent decide. If a profile name cannot be resolved by later configuration, do not silently substitute another profile.
+
+The common result must not contain concrete model identifiers, reasoning effort, or `/fast` state. The parent agent makes the final delegation decision, while profile resolution and worker configuration happen separately. Judge-specific invocation, connection details, and raw response formats are outside the common result; map Clef, Jev, or another judge's response to these fields in that judge's environment.
+
 ## Parallelism
 
 Prefer parallel execution when two or more tasks are independent.
