@@ -130,3 +130,7 @@ python3 -m unittest discover -s tests -v
 - [OpenAI: Build skills](https://developers.openai.com/plugins/build/skills)
 - [OpenAI: Multi-agent](https://developers.openai.com/api/docs/guides/responses-multi-agent)
 - [Agent Skills specification](https://agentskills.io/)
+
+## ライセンス
+
+本プロジェクトはMIT Licenseの下で公開しています。詳細は[LICENSE](LICENSE)を参照してください。
