@@ -1,12 +1,36 @@
+<p align="center">
+  <img src="./assets/gwitg_logo.png" alt="gwitg logo" width="420">
+</p>
+
+<p align="center">
+  <strong>Delegate independent work to subagents without turning the parent agent into a progress monitor.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Twil3akine/gwitg/releases"><img src="https://img.shields.io/github/v/release/Twil3akine/gwitg" alt="GitHub release"></a>
+  <a href="./SKILL.md"><img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-0b7285" alt="Agent Skill"></a>
+</p>
+
 # gwitg
 
-`gwitg`は、Codexが独立した作業をサブエージェントに並列で任せるためのAgent Skillです。サブエージェントは、親エージェントから作業を任されて動く別のエージェントです。
+`gwitg`は、Codexが独立した作業をサブエージェントへ委任し、必要に応じて並列実行するためのAgent Skillです。
 
-基本方針は、**作業を任せたら進捗を監視せず、状態確認のポーリングをしない**ことです。親エージェントは、その間に独立した別の作業を進められます。詳しいルールは[SKILL.md](SKILL.md)に記載しています。
+中心となる考え方は、**作業を任せた後に親エージェントが進捗監視を続けないこと**です。親エージェントは結果を待つ間、別の独立した作業を進めます。
 
-## インストール
+```text
+parent agent
+├─ investigate-api
+├─ tests
+└─ review
 
-利用範囲に合わせて、次のどちらかを選んでください。
+        ↓ completed results
+
+parent integrates and validates
+```
+
+状態確認そのものは禁止しませんが、短い間隔でのポーリングや途中ログを使った進捗監視は行いません。詳しい運用ルールは[SKILL.md](SKILL.md)に定義しています。
+
+## Quick Start
 
 ### ユーザー単位で使う
 
@@ -14,100 +38,188 @@
 git clone https://github.com/Twil3akine/gwitg ~/.codex/skills/gwitg
 ```
 
-Codexがユーザー単位で利用するスキルの配置先は、`~/.codex/skills/<skill-name>/SKILL.md`です。
-
 ### 特定のリポジトリだけで使う
 
-対象のリポジトリ内で実行してください。
+対象リポジトリで実行します。
 
 ```sh
 mkdir -p .codex/skills
 git clone https://github.com/Twil3akine/gwitg .codex/skills/gwitg
 ```
 
-## 使い方
-
-Codexに、`gwitg`の使用を明示的に指示します。
+Codexへ明示的に指定する場合は、次のように依頼します。
 
 ```text
 gwitgを使ってこの作業を進めて
 ```
 
-明示的に指示せず、Codexによるスキルの自動選択に任せることもできます。
+スキルの自動選択に任せることもできます。
 
-### 作業の進め方
+## どう動くか
 
-親エージェントは、頻繁なやり取りが不要な独立した作業をサブエージェントに任せます。独立した作業が複数あれば、可能な限り並列で進めます。
+親エージェントは、頻繁な同期が不要で、目的と完了条件を明確にできる作業をサブエージェントへ委任します。
 
-サブエージェントの既定設定は、モデルが`6-luna`、推理レベルが`high`です。この設定を選べない環境では、別の設定へ黙って変更せず、ユーザーの明示的な指示に従うか、現在のエージェントが作業を続けます。
+典型的には次のような作業が対象です。
 
-作業を任せた後も、必要に応じて実行中・完了・失敗などの状態を確認できます。ただし、短い間隔で状態確認を繰り返すポーリングや、途中の出力・ログを使った進捗監視は禁止します。完了通知を待つ操作は許可します。応答がないことや時間がかかっていることだけでは、失敗と判断しません。
+- repository investigation
+- bug investigation
+- well-defined implementation
+- test writing
+- independent code review
+- documentation investigation
+- codebase search
+- self-contained experiments
+- validation against explicit acceptance criteria
 
-実行中に伝えられるのは、誤った前提の訂正、新たに判明した制約、作業の中止に限ります。目的・成果物・作業方針の変更や、通常の追加作業には使いません。訂正や制約により元の依頼を続けられない場合は、サブエージェントが理由を報告して停止します。
+独立した作業が複数あれば、依存関係が許す範囲で並列に実行します。
 
-調査結果には、必要に応じて確認対象、確認日時と情報が示す時点、直接確認した事実か過去の記録か、未確認事項を含めます。時系列が重要な調査では現在の事実と過去の記録を区別し、情報の時点が不明なら不明と書きます。
+サブエージェントの既定設定は次のとおりです。
 
-サブエージェントも、必要に応じて別のサブエージェントに作業を任せられます。その場合も、同じ設定と監視しないルールを適用します。
+```text
+model: 6-luna
+reasoning effort: high
+Fast mode: environment default
+```
 
-作業を任せてよいか判断が難しい場合は、次の設定で判断役を選べます。委任が明らかな作業では外部モデルを呼びません。
+この設定を利用できない場合、別のworker設定へ無断で切り替えません。
 
-### 判断役を選ぶ
+### 実行中のルール
 
-最初にプロジェクトルートの`.gwitg/decision-model`を読みます。このファイルがない場合だけ、共通設定の`~/.config/gwitg/decision-model`を読みます。どちらもなければ`none`を使います。
+作業を任せた後も、必要であれば`running`、`completed`、`failed`などの状態を確認できます。
 
-プロジェクトルートは、作業開始ディレクトリが属するGitリポジトリのルートです。Git管理外の場合や、Gitを利用できない・ルートを取得できない場合は、作業開始ディレクトリを使います。プロジェクト設定が`none`の場合も、共通設定より優先されます。
+ただし、次のような監視は行いません。
 
-ファイルに書く値は、次のいずれか1つです。
+- 短い間隔で状態確認を繰り返す
+- sleepとstatus確認を交互に行う
+- 途中ログやpartial outputを確認する
+- 遅いという理由だけで再起動・差し替え・モデル変更を行う
 
-| 値 | 委任判断の担当 |
+完了通知を待つ操作は許可されます。
+
+### 実行中に伝えられること
+
+親エージェントから実行中のsubagentへ追加で伝えられるのは、次の3種類です。
+
+- 誤った前提の訂正
+- 新たに判明した制約
+- 作業の中止
+
+目的・成果物・作業方針を変える通常の追加指示には使いません。
+
+訂正や制約により元の依頼を続けられなくなった場合、subagentは理由を報告して停止します。
+
+## Delegation Judge
+
+委任すべきか判断が難しい場合だけ、外部のdecision modelを判断役として利用できます。
+
+利用できる値は次の3つです。
+
+| 値 | 判断役 |
 | --- | --- |
 | `clef` | 利用環境のClef判断ツール |
 | `jev` | 利用環境のJev判断ツール |
 | `none` | 親エージェント自身 |
 
-例えば、Clefを使う場合は次を実行します。すでに設定がある場合は、このコマンドで上書きされます。
+判断役の優先順位は次のとおりです。
 
-```sh
-gwitg_config_dir="$HOME/.config/gwitg"
-mkdir -p "$gwitg_config_dir"
-printf '%s\n' clef > "$gwitg_config_dir/decision-model"
+```text
+1. ユーザーがその作業で明示した指定
+2. <project-root>/.gwitg/decision-model
+3. ~/.config/gwitg/decision-model
+4. none
 ```
 
-プロジェクトごとに判断役を上書きする場合は、プロジェクトルートの`.gwitg/decision-model`に同じ値を書きます。
+プロジェクト設定が存在する場合は、ユーザー共通設定より優先されます。
 
-Jevを使う場合は`clef`を`jev`に、外部の判断役を使わない場合は`none`に変更します。設定ファイルがない場合の既定値も`none`です。ユーザーがその作業で判断役を明示した場合は、ファイルより明示指定を優先します。
+### 共通設定
 
-設定ファイルは作業開始時に一度だけ読み、その作業中は同じ判断役を使います。サブエージェントにも選択結果を渡すため、同じ作業で読み取りを繰り返しません。ファイルの変更は、次の別の作業を開始したときに反映されます。作業の続きや状況確認は、新しい作業として扱いません。作業中にユーザーが判断役を明示した場合は、その指定を優先します。
+例えば、通常はClefを使う場合は次のように設定します。
 
-常駐プロセスは不要で、選択結果を別の作業へ持ち越しません。設定ファイルを読む処理は、ユーザーの設定を変更しません。
+```sh
+mkdir -p "$HOME/.config/gwitg"
+printf '%s\n' clef > "$HOME/.config/gwitg/decision-model"
+```
 
-空ファイル、不正な値、読み取り失敗は作業開始時に知らせ、その作業では`none`として親エージェントが判断します。プロジェクト設定の読み取りに失敗しても、共通設定へ切り替えません。判断のたびに読み取りを再試行しません。選んだ判断ツールが利用できない場合も、その事情を伝えて親エージェントが判断し、別の外部モデルへ無断で切り替えません。
+### プロジェクトごとの上書き
 
-この設定はClefやJevへの接続を用意するものではありません。対応するツールや接続が利用環境に必要です。実際に作業するworkerの既定値は`6-luna`・`high`のままです。
+特定のリポジトリだけ別の判断役を使う場合は、プロジェクトルートに設定します。
 
-設定の読み取りにはPython 3を使います。作業対象のディレクトリから、スキル配置先のスクリプトを絶対パスで指定してください。スキルの配置先に移動すると、その場所を基準にプロジェクトを探してしまいます。
+```sh
+mkdir -p .gwitg
+printf '%s\n' jev > .gwitg/decision-model
+```
+
+外部の判断役を使わない場合は`none`を指定します。
+
+```sh
+printf '%s\n' none > .gwitg/decision-model
+```
+
+設定ファイルは作業開始時に一度だけ読み、その作業中は同じ判断役を利用します。子エージェントにも選択結果を渡すため、同じ作業の中で設定ファイルを繰り返し読みません。
+
+設定値が不正、読み取り不能、または選択した外部判断ツールを利用できない場合は、その事実を伝えて親エージェントが判断します。ClefからJev、JevからClefへ無断で切り替えることはありません。
+
+この設定は外部モデルへの接続自体を用意するものではありません。ClefやJevを実際に呼び出せるツールや接続は、利用環境側に必要です。
+
+設定解決には次のスクリプトを使います。
 
 ```sh
 python3 /path/to/gwitg/scripts/decision_model.py
 ```
 
-Python 3や読み取りスクリプトを利用できない場合は、その事情を伝えて親エージェントが判断します。
+スキルのディレクトリへ移動せず、作業対象のディレクトリから絶対パスで実行します。
 
-### 実行中のサブエージェントを操作する
+## Recursive Delegation
 
-ユーザーが実行中のサブエージェントを確認・操作する場合は、`/subagent`を直接使ってください。`gwitg`のルールで認める操作は、次の4種類です。
+subagentも、割り当てられた作業の中に独立したsubtaskがある場合は、さらにsubagentへ委任できます。
+
+```text
+parent
+├─ investigate-api
+│  ├─ inspect-cache
+│  └─ inspect-tests
+└─ implementation
+```
+
+再帰的に委任する場合も、同じno-pollingルールと介入制限を適用します。
+
+子を持つsubagentは、子の完了結果を統合してから親へ完了報告します。
+
+## `/subagent`によるユーザー操作
+
+ユーザーは`/subagent`から実行中のsubagentを直接確認・操作できます。
+
+gwitgで許可する操作は次の4種類です。
 
 1. 現在の状態を確認する
 2. スレッドを開く
 3. `/fast`を有効・無効にする
 4. モデルまたは推理レベルを変更する
 
-親エージェントは、ポーリングにならない状態確認と、上記の訂正・制約追加・中止を伝えられます。スレッド閲覧、`/fast`やモデル・推理レベルの変更は代行しません。実行中のエージェントの差し替えや、中止した作業の再開、目的・作業方針を変える追加指示は、これらの例外に含めません。
+親エージェントは、スレッドを開く操作や`/fast`・model・reasoning effortの変更を代理しません。
 
-## ファイル構成
+実行中workerの差し替え、目的変更、作業方針変更はこれらの例外に含まれません。
+
+## Investigation Reports
+
+時系列や情報の鮮度が重要な調査では、必要に応じて次を区別して報告します。
+
+- 何を確認したか
+- いつ確認したか
+- 証拠がどの時点の情報を示しているか
+- 現在状態を直接確認した事実か、過去の文書・ログか
+- 未確認事項と制約
+
+今日読んだ文書でも、その内容が今日の状態を示しているとは限りません。情報の時点が分からない場合は推測せず、不明とします。
+
+単純なコード調査では、必要な項目だけを報告し、長い固定テンプレートは要求しません。
+
+## Repository Layout
 
 ```text
 gwitg/
+├── assets/
+│   └── gwitg_logo.png
 ├── README.md
 ├── SKILL.md
 ├── scripts/
@@ -116,16 +228,20 @@ gwitg/
     └── test_decision_model.py
 ```
 
-[SKILL.md](SKILL.md)に、エージェントが従う運用ルールを定義しています。
+- [SKILL.md](SKILL.md): エージェントが従う運用ルール
+- [scripts/decision_model.py](scripts/decision_model.py): decision model設定の解決
+- [tests/test_decision_model.py](tests/test_decision_model.py): 設定解決のテスト
 
-## 設定読み取りのテスト
+## Test
 
 ```sh
 python3 -m unittest discover -s tests -v
 ```
 
-## 参考資料
+## Links
 
+- [Releases](https://github.com/Twil3akine/gwitg/releases)
+- [Issues](https://github.com/Twil3akine/gwitg/issues)
 - [OpenAI: Skills](https://developers.openai.com/api/docs/guides/tools-skills)
 - [OpenAI: Build skills](https://developers.openai.com/plugins/build/skills)
 - [OpenAI: Multi-agent](https://developers.openai.com/api/docs/guides/responses-multi-agent)
