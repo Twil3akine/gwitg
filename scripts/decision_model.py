@@ -48,11 +48,11 @@ def read_value(path):
 
 
 def read_decision_model(environ=None, cwd=None):
-    path = common_config_path(environ)
+    path = project_config_path(cwd)
     try:
         return read_value(path)
     except FileNotFoundError:
-        path = project_config_path(cwd)
+        path = common_config_path(environ)
     try:
         return read_value(path)
     except FileNotFoundError:

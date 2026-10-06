@@ -50,15 +50,15 @@ class DecisionModelTests(unittest.TestCase):
     def test_missing_common_and_project_configuration_uses_none(self):
         self.assertEqual(self.read(), "none")
 
-    def test_common_configuration_has_precedence(self):
+    def test_project_configuration_has_precedence(self):
         self.write_common_config(b"clef\n")
         self.write_project_config(b"jev\n")
-        self.assertEqual(self.read(), "clef")
+        self.assertEqual(self.read(), "jev")
 
-    def test_common_none_takes_precedence_over_project_value(self):
+    def test_project_value_takes_precedence_over_common_none(self):
         self.write_common_config(b"none\n")
         self.write_project_config(b"clef\n")
-        self.assertEqual(self.read(), "none")
+        self.assertEqual(self.read(), "clef")
 
     def test_project_configuration_is_used_when_common_file_is_missing(self):
         self.write_project_config(b"jev\n")
@@ -125,19 +125,18 @@ class DecisionModelTests(unittest.TestCase):
             self.assertEqual(self.read(), "jev")
 
     def test_invalid_project_configuration_is_an_error(self):
+        self.write_common_config(b"clef\n")
         self.write_project_config(b"CLEF\n")
         with self.assertRaises(ValueError):
             self.read()
 
-    def test_common_configuration_error_does_not_fall_back(self):
+    def test_common_configuration_error_is_reported_when_project_missing(self):
         self.write_common_config(b"invalid\n")
-        self.write_project_config(b"jev\n")
         with self.assertRaises(ValueError):
             self.read()
 
-    def test_unreadable_common_configuration_does_not_fall_back(self):
+    def test_unreadable_common_configuration_is_reported_when_project_missing(self):
         common_path = self.write_common_config(b"clef\n")
-        self.write_project_config(b"jev\n")
         original_read_text = Path.read_text
 
         def fail_for_common(path, *args, **kwargs):
@@ -158,13 +157,11 @@ class DecisionModelTests(unittest.TestCase):
 
     def test_directory_instead_of_common_config_reports_error(self):
         (self.home / ".config" / "gwitg" / "decision-model").mkdir(parents=True)
-        self.write_project_config(b"jev\n")
         with self.assertRaises(OSError):
             self.read()
 
     def test_separate_reads_observe_configuration_changes(self):
         path = self.write_common_config(b"clef\n")
-        self.write_project_config(b"none\n")
         self.assertEqual(self.read(), "clef")
         path.write_bytes(b"jev\n")
         self.assertEqual(self.read(), "jev")
