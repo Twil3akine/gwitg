@@ -80,8 +80,9 @@ Keep work in the current agent when it requires:
 At the start of each user task using this skill, select the delegation judge once as follows:
 
 1. An explicit user selection of `clef`, `jev`, or `none` for this task takes precedence.
-2. Otherwise, run `python3 <skill-directory>/scripts/decision_model.py` using this skill's actual directory. It reads `$XDG_CONFIG_HOME/gwitg/decision-model`, or `~/.config/gwitg/decision-model` when XDG_CONFIG_HOME is unset or empty.
-3. The file contains exactly one lowercase value: `clef`, `jev`, or `none`, with optional surrounding whitespace. A missing file selects `none`. A blank, invalid, unreadable, or non-UTF-8 file is an error. XDG_CONFIG_HOME, when set, must be absolute.
+2. Otherwise, run `python3 <skill-directory>/scripts/decision_model.py` from the task's working directory, using the absolute path to this skill's script. It first reads `~/.config/gwitg/decision-model`. Only if that file is absent does it read `<project-root>/.gwitg/decision-model`. Do not change to the skill directory before running the resolver.
+3. The project root is the Git repository root discovered from the working directory at task start. Outside a Git repository, or when Git is unavailable or root discovery fails, use that starting directory. `XDG_CONFIG_HOME` is not used.
+4. The file contains exactly one lowercase value: `clef`, `jev`, or `none`, with optional surrounding whitespace. If both files are absent, select `none`. A blank, invalid, unreadable, or non-UTF-8 file is an error. A common setting of `none` takes precedence over the project setting. Do not fall back to the project setting when reading the common setting fails.
 
 Retain the selection in the task context and reuse it for all delegation judgments within that task. Pass the selection to subagents in their delegation prompts so descendants do not reread the setting for the same task. Changes to the file take effect at the start of the next user task, not during the current task. A continuation or status question does not start a new task. An explicit user selection during the task overrides the retained selection without rereading the file. Do not persist the selection across separate user tasks or run a resident process.
 
