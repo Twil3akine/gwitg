@@ -11,9 +11,13 @@
   <a href="https://github.com/Twil3akine/gwitg/releases"><img src="https://img.shields.io/github/v/release/Twil3akine/gwitg" alt="GitHub release"></a>
 </p>
 
+<p align="center">
+  <a href="./README.en.md">English</a> | <strong>日本語</strong>
+</p>
+
 # gwitg
 
-`gwitg`は、Codexが独立した作業をサブエージェントへ委任し、必要に応じて並列実行するためのAgent Skillです。
+`gwitg`は、**OpenAI Codex向け**に、独立した作業をサブエージェントへ委任し、必要に応じて並列実行するためのAgent Skillです。
 
 中心となる考え方は、**作業を任せた後に親エージェントが進捗監視を続けないこと**です。親エージェントは結果を待つ間、別の独立した作業を進めます。
 
@@ -29,6 +33,12 @@ parent integrates and validates
 ```
 
 状態確認そのものは禁止しませんが、短い間隔でのポーリングや途中ログを使った進捗監視は行いません。詳しい運用ルールは[SKILL.md](SKILL.md)に定義しています。
+
+## 対応環境
+
+現在の`gwitg`は**OpenAI Codex向け**です。`/subagent`、worker model、reasoning effortなど、Codexのsubagent機構と操作を前提にしています。
+
+Claude Code、Cursor、Copilotなどでの動作は現時点では対応・検証していないため、汎用的なcross-agent skillとしては扱いません。
 
 ## Quick Start
 
@@ -222,6 +232,7 @@ gwitg/
 │   └── gwitg_logo.png
 ├── LICENSE
 ├── README.md
+├── README.en.md
 ├── SKILL.md
 ├── scripts/
 │   └── decision_model.py
