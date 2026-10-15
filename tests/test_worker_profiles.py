@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "worker_profiles.py"
@@ -192,7 +193,7 @@ class WorkerProfileTests(unittest.TestCase):
         self.assertNotIsInstance(error.exception, worker_profiles.InvalidJudgeResult)
         self.assertIn("unknown worker profile 'missing'", str(error.exception))
 
-    def test_common_configuration_precedes_project_configuration(self):
+    def test_project_configuration_precedes_common_configuration(self):
         self.write_common_config(
             {"standard": {"model": "common", "reasoning_effort": "high"}}
         )
@@ -200,8 +201,84 @@ class WorkerProfileTests(unittest.TestCase):
             {"standard": {"model": "project", "reasoning_effort": "low"}}
         )
         self.assertEqual(
-            self.resolve(), {"model": "common", "reasoning_effort": "high"}
+            self.resolve(), {"model": "project", "reasoning_effort": "low"}
         )
+
+    def test_project_configuration_fully_replaces_common_profiles(self):
+        self.write_common_config(
+            {
+                "standard": {"model": "common", "reasoning_effort": "high"},
+                "light": {"model": "common-light", "reasoning_effort": "low"},
+            }
+        )
+        self.write_project_config(
+            {"standard": {"model": "project", "reasoning_effort": "medium"}}
+        )
+
+        with self.assertRaisesRegex(ValueError, "unknown worker profile 'light'"):
+            self.resolve("light")
+
+    def test_invalid_project_configuration_is_an_error_without_common_fallback(self):
+        self.write_common_config(
+            {"standard": {"model": "common", "reasoning_effort": "high"}}
+        )
+        config = self.cwd / ".gwitg" / "worker-profiles.json"
+        config.parent.mkdir(parents=True)
+        config.write_text("{not json", encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "invalid JSON"):
+            self.resolve()
+
+    def test_invalid_utf8_project_configuration_is_an_error_without_fallback(self):
+        self.write_common_config(
+            {"standard": {"model": "common", "reasoning_effort": "high"}}
+        )
+        config = self.cwd / ".gwitg" / "worker-profiles.json"
+        config.parent.mkdir(parents=True)
+        config.write_bytes(b"\xff")
+
+        with self.assertRaises(UnicodeError):
+            self.resolve()
+
+    def test_invalid_project_schema_does_not_fall_back(self):
+        self.write_common_config(
+            {"standard": {"model": "common", "reasoning_effort": "high"}}
+        )
+        config = self.cwd / ".gwitg" / "worker-profiles.json"
+        for document in ({}, {"profiles": {}}, {"profiles": {"standard": {"model": "project"}}}):
+            with self.subTest(document=document):
+                self.write_config(config, document)
+                with self.assertRaises(ValueError):
+                    self.resolve()
+
+    def test_directory_project_configuration_is_an_error_without_fallback(self):
+        self.write_common_config(
+            {"standard": {"model": "common", "reasoning_effort": "high"}}
+        )
+        (self.cwd / ".gwitg" / "worker-profiles.json").mkdir(parents=True)
+
+        with self.assertRaises(OSError):
+            self.resolve()
+
+    def test_common_configuration_is_used_when_project_file_is_missing(self):
+        profiles = {"standard": {"model": "common", "reasoning_effort": "high"}}
+        self.write_common_config(profiles)
+        self.assertEqual(self.resolve(), profiles["standard"])
+
+    def test_unreadable_project_configuration_does_not_fall_back(self):
+        profiles = {"standard": {"model": "common", "reasoning_effort": "high"}}
+        self.write_common_config(profiles)
+        project_path = self.write_project_config(profiles)
+        original_read_text = Path.read_text
+
+        def fail_for_project(path, *args, **kwargs):
+            if path.resolve() == project_path.resolve():
+                raise PermissionError("denied")
+            return original_read_text(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "read_text", fail_for_project):
+            with self.assertRaises(PermissionError):
+                self.resolve()
 
     def test_invalid_configuration_is_rejected(self):
         config = self.home / ".config" / "gwitg" / "worker-profiles.json"

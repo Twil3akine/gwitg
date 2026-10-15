@@ -43,7 +43,7 @@ Do not silently substitute a different model or reasoning effort when a configur
 
 Worker profiles are names for concrete model and reasoning-effort settings. The built-in profiles are `light`, `standard`, and `strong`; precedence is explicit user selection, a valid common judge recommendation when delegation or profile choice is ambiguous, then `standard`. The built-in `standard` profile preserves the existing `6-luna` / `high` behavior. A judge recommends only a profile name; `/fast` is independent of a profile.
 
-The resolver reads `~/.config/gwitg/worker-profiles.json` first, then `<project-root>/.gwitg/worker-profiles.json` when the common file is absent. If neither file exists, it uses the built-in settings below. A custom file replaces the built-in profile list and must have this shape:
+Run the resolver from the task's working directory using its absolute path, as with the delegation-judge resolver. It reads `<project-root>/.gwitg/worker-profiles.json` first, then `~/.config/gwitg/worker-profiles.json` only when the project file is absent. If neither file exists, it uses the built-in settings below. An invalid or unreadable project file is an error, not a reason to fall back to common settings. The selected file replaces the entire profile list; profiles are not merged across project, common, and built-in settings. A custom file must have this shape:
 
 ```json
 {
@@ -56,6 +56,14 @@ The resolver reads `~/.config/gwitg/worker-profiles.json` first, then `<project-
 ```
 
 The resolver returns configured model and effort strings unchanged; it does not return the profile name, so the caller must retain that name alongside the returned settings. It does not guarantee that the runtime supports those settings. Invalid JSON, missing settings, or an unknown profile produces an error. A caller can resolve an explicit profile with `python3 <skill-directory>/scripts/worker_profiles.py <profile>`; omitting the argument resolves `standard`. A programmatic caller can pass a parsed common judge result as `judge_result` to `resolve_worker_profile`. An explicit user profile takes precedence; with no explicit profile, a valid positive recommendation resolves its named profile, a valid negative recommendation returns no worker settings, and no judge result resolves `standard`. An invalid common result raises `InvalidJudgeResult` and must be treated as unavailable as a whole so the parent can decide. A valid recommendation whose profile is not configured raises the normal profile-resolution error. Neither case silently selects another profile. Keep the current task in the parent when the resolved settings are unsupported.
+
+## Launching a worker
+
+Check the current spawn tool's accepted model identifiers, reasoning efforts, and context-inheritance options in its exposed schema and parameter documentation before launching. Keep resolver output unchanged. For example, in a runtime that advertises `gpt-6-luna` and `gpt-6-astra` as the corresponding models, built-in `light` and `standard` launch as `gpt-6-luna`, and `strong` as `gpt-6-astra`, with their resolved reasoning efforts. This is a runtime-dependent mapping, not a universal model list. Retain the established launch identifier alongside the selected profile and resolved settings for descendants. Do not infer aliases by adding a prefix or substitute another model when no supported identifier is established.
+
+If the spawn tool requires `fork_turns="none"` to select a model or reasoning effort, set it and pass both settings explicitly. In that runtime, `fork_turns="all"` or its default inherits the parent's configuration and cannot enforce a different worker profile. Follow the current tool contract rather than assuming these parameters exist in every environment. If the selected settings cannot be applied, keep the work in the current agent.
+
+Without inherited history, the delegation prompt must be self-contained: include the objective and acceptance criteria, working directory and relevant files, current state and constraints, permitted changes and validation, and expected report. Also pass the selected judge, profile name, resolved settings, established launch identifier, and applicable gwitg rules so descendants can reuse them without rereading configuration. Do not assume the worker can see earlier user messages or the parent's findings.
 
 ## Decide whether to delegate
 
@@ -94,9 +102,9 @@ Keep work in the current agent when it requires:
 At the start of each user task using this skill, select the delegation judge once as follows:
 
 1. An explicit user selection of `clef`, `jev`, or `none` for this task takes precedence.
-2. Otherwise, run `python3 <skill-directory>/scripts/decision_model.py` from the task's working directory, using the absolute path to this skill's script. It first reads `~/.config/gwitg/decision-model`. Only if that file is absent does it read `<project-root>/.gwitg/decision-model`. Do not change to the skill directory before running the resolver.
+2. Otherwise, run `python3 <skill-directory>/scripts/decision_model.py` from the task's working directory, using the absolute path to this skill's script. It first reads `<project-root>/.gwitg/decision-model`. Only if that file is absent does it read `~/.config/gwitg/decision-model`. Do not change to the skill directory before running the resolver.
 3. The project root is the Git repository root discovered from the working directory at task start. Outside a Git repository, or when Git is unavailable or root discovery fails, use that starting directory.
-4. The file contains exactly one lowercase value: `clef`, `jev`, or `none`, with optional surrounding whitespace. If both files are absent, select `none`. A blank, invalid, unreadable, or non-UTF-8 file is an error. A common setting of `none` takes precedence over the project setting. Do not fall back to the project setting when reading the common setting fails.
+4. The file contains exactly one lowercase value: `clef`, `jev`, or `none`, with optional surrounding whitespace. If both files are absent, select `none`. A blank, invalid, unreadable, or non-UTF-8 file is an error. A project setting of `none` takes precedence over the common setting. Do not fall back to the common setting when reading the project setting fails.
 
 Retain the selection in the task context and reuse it for all delegation judgments within that task. Pass the selection to subagents in their delegation prompts so descendants do not reread the setting for the same task. Changes to the file take effect at the start of the next user task, not during the current task. A continuation or status question does not start a new task. An explicit user selection during the task overrides the retained selection without rereading the file. Do not persist the selection across separate user tasks or run a resident process.
 

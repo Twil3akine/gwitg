@@ -64,11 +64,11 @@ def _validate_profiles(profiles, path="worker profiles"):
 
 
 def read_profiles(environ=None, cwd=None):
-    path = common_config_path(environ)
+    path = project_config_path(cwd)
     try:
         raw = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        path = project_config_path(cwd)
+        path = common_config_path(environ)
         try:
             raw = path.read_text(encoding="utf-8")
         except FileNotFoundError:
