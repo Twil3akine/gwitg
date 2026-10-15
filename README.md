@@ -83,15 +83,7 @@ gwitgを使ってこの作業を進めて
 
 独立した作業が複数あれば、依存関係が許す範囲で並列に実行します。
 
-サブエージェントの既定設定は次のとおりです。
-
-```text
-model: 6-luna
-reasoning effort: high
-Fast mode: environment default
-```
-
-この設定を利用できない場合、別のworker設定へ無断で切り替えません。
+作業で使うworker profileをユーザーが明示した場合は、その指定を優先します。明示がなく、委任判断またはprofile選択が曖昧な場合は、有効な共通形式による判断役の推薦profileを使います。それ以外で親が委任を決めたときは既定の`standard`を使います。profile名と解決したモデル・推理レベルを一緒に保持し、再帰委任する子にも渡します。子は同じprofileと解決値を使い、設定を読み直しません。組み込みの`standard`は`6-luna`・`high`です。実行環境で使えない設定を別の値へ黙って置き換えません。 `/fast`は環境の既定値を使います。
 
 ### 実行中のルール
 
@@ -120,7 +112,7 @@ Fast mode: environment default
 
 ## Delegation Judge
 
-委任すべきか判断が難しい場合だけ、外部のdecision modelを判断役として利用できます。
+委任するか、使うprofileを決めにくい場合に限り、外部のdecision modelを判断役として利用できます。委任とprofileの両方が明らかな作業では外部モデルを呼びません。
 
 利用できる値は次の3つです。
 
@@ -179,6 +171,50 @@ python3 /path/to/gwitg/scripts/decision_model.py
 
 スキルのディレクトリへ移動せず、作業対象のディレクトリから絶対パスで実行します。
 
+### 判断役の共通出力
+
+判断役の結果は、次の3項目を持つ共通形式に読み替えます。
+
+```yaml
+delegate: true
+profile: light
+reason: Independent repository search with bounded scope
+```
+
+`delegate`は必須の真偽値です。委任する場合の`profile`は設定済みworker profile名、委任しない場合は`null`です。`reason`には空でない短い説明を入れます。項目の欠落、型違い、空の理由、委任とprofileの矛盾、未定義の項目があれば結果全体を無効とし、親エージェントが判断します。無効な結果から一部の値だけを採用しません。
+
+判断役は具体的なモデル名、推理レベル、`/fast`の状態を指定しません。親エージェントが最終的な委任を決め、profileの解決とworker設定は別に行います。ClefやJevの呼び出し方は各環境に委ねます。
+
+## Worker Profiles
+
+worker profileは、workerのモデルと推理レベルをまとめた名前です。組み込みprofileは`light`、`standard`、`strong`です。既定値は`standard`で、従来の`6-luna`・`high`を保ちます。判断役は具体的な設定ではなくprofile名だけを推薦します。`/fast`はprofileとは別の設定です。
+
+profile設定はプロジェクトルートの`.gwitg/worker-profiles.json`を先に読み、存在しない場合のみ共通設定`~/.config/gwitg/worker-profiles.json`を読みます。どちらもなければ組み込み設定を使います。採用した設定ファイルの一覧全体を使い、複数設定を合成しません。プロジェクトファイルが不正・読み取り不能な場合はエラーとし、共通設定へ切り替えません。
+
+```json
+{
+  "profiles": {
+    "light": {"model": "6-luna", "reasoning_effort": "low"},
+    "standard": {"model": "6-luna", "reasoning_effort": "high"},
+    "strong": {"model": "6-astra", "reasoning_effort": "high"}
+  }
+}
+```
+
+選んだprofileの設定は、作業対象ディレクトリから次のように解決できます。引数を省略すると`standard`を使います。
+
+```sh
+python3 /path/to/gwitg/scripts/worker_profiles.py light
+```
+
+resolverは設定値をそのまま返し、実行環境で利用できるかは確認しません。明示profileや有効な推薦profileが存在しない場合、または設定が不正な場合はエラーとして扱い、別profileへ黙って切り替えません。プログラムから共通形式を渡す方法など、詳細は[SKILL.md](SKILL.md)を参照してください。
+
+### Workerの起動
+
+起動前に、利用中のspawnツールが受け付けるモデルID、推理レベル、会話履歴の引き継ぎ方を確認します。例えばツールが`gpt-6-luna`と`gpt-6-astra`を対応IDとして示す環境では、組み込みの`light`と`standard`は`gpt-6-luna`、`strong`は`gpt-6-astra`で起動します。この対応は実行環境に依存します。IDに接頭辞を機械的に足したり、別の値へ置き換えたりしません。選択したprofile名、resolverの値、起動IDを子にも引き継ぎます。
+
+モデルや推理レベルを指定するために`fork_turns="none"`が必要なツールでは、その値と両方の設定を明示します。会話履歴を渡さない場合、作業指示には目的と完了条件、作業ディレクトリ、関連ファイル、現状と制約、変更可能な範囲、検証方法、報告内容を含めます。さらに選択済みの判断役とprofile、解決値、起動ID、適用するgwitgルールを渡し、子が過去の会話を読めることを前提にしません。選んだ設定で起動できない場合は、親が作業します。
+
 ## Recursive Delegation
 
 subagentも、割り当てられた作業の中に独立したsubtaskがある場合は、さらにsubagentへ委任できます。
@@ -191,7 +227,7 @@ parent
 └─ implementation
 ```
 
-再帰的に委任する場合も、同じno-pollingルールと介入制限を適用します。
+再帰的に委任する場合も、選択済みのprofile名と解決した設定を引き継ぎ、同じno-pollingルールと介入制限を適用します。
 
 子を持つsubagentは、子の完了結果を統合してから親へ完了報告します。
 
@@ -235,9 +271,11 @@ gwitg/
 ├── README.en.md
 ├── SKILL.md
 ├── scripts/
-│   └── decision_model.py
+│   ├── decision_model.py
+│   └── worker_profiles.py
 └── tests/
-    └── test_decision_model.py
+    ├── test_decision_model.py
+    └── test_worker_profiles.py
 ```
 
 - [LICENSE](LICENSE): MIT License

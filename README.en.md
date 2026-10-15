@@ -83,15 +83,7 @@ Typical candidates include:
 
 When multiple tasks are independent, gwitg prefers parallel execution where dependencies allow it.
 
-The default worker configuration is:
-
-```text
-model: 6-luna
-reasoning effort: high
-Fast mode: environment default
-```
-
-If this configuration is unavailable, gwitg does not silently substitute another worker configuration.
+The user-selected worker profile takes precedence. If no profile is explicit and delegation or profile choice is ambiguous, use the profile recommended by a valid common-format judge result. Otherwise, when the parent decides to delegate, the default is `standard`. Keep the profile name with its resolved model and reasoning effort, and pass all three to descendants so they reuse the same settings without rereading configuration. The built-in `standard` profile preserves the previous `6-luna` / `high` setting. Do not silently replace unsupported settings with different ones. Keep `/fast` at the environment default.
 
 ### Rules while a worker is running
 
@@ -118,7 +110,7 @@ These exceptions do not permit ordinary scope changes or additional tasks. If a 
 
 ## Delegation Judge
 
-When it is genuinely unclear whether work should be delegated, gwitg can optionally use an external decision model as an advisory judge.
+When it is unclear whether to delegate or which profile to use, gwitg can optionally use an external decision model as an advisory judge. Do not call a judge when both decisions are clear.
 
 Supported values are:
 
@@ -169,6 +161,50 @@ python3 /path/to/gwitg/scripts/decision_model.py
 
 Run it from the task's working directory using an absolute path to the skill script.
 
+### Common judge result
+
+Interpret the result from Clef, Jev, or another judge through this common three-field format:
+
+```yaml
+delegate: true
+profile: light
+reason: Independent repository search with bounded scope
+```
+
+`delegate` is required and must be a boolean. `profile` is required and must name a configured worker profile when `delegate` is `true`; it must be `null` when `delegate` is `false`. `reason` is a required, non-empty short explanation. Missing or extra fields, invalid types, an empty reason, or inconsistent values make the entire result invalid. Do not use only part of an invalid result; the parent decides.
+
+The judge recommends a profile name only. It does not select a concrete model, reasoning effort, or `/fast` state, and the parent makes the final delegation decision. Judge-specific invocation and connection details remain environment-specific.
+
+## Worker Profiles
+
+Worker profiles name a worker model and reasoning effort. The built-in profiles are `light`, `standard`, and `strong`; the default is `standard`, which preserves `6-luna` / `high`. `/fast` is independent of the worker profile.
+
+The resolver reads `.gwitg/worker-profiles.json` at the project root first, then `~/.config/gwitg/worker-profiles.json` only if the project file is absent. If both are absent, it uses the built-in settings below. The selected file replaces the whole profile list; the files and built-in settings are not merged. An invalid or unreadable project file is an error and does not fall back to common configuration.
+
+```json
+{
+  "profiles": {
+    "light": {"model": "6-luna", "reasoning_effort": "low"},
+    "standard": {"model": "6-luna", "reasoning_effort": "high"},
+    "strong": {"model": "6-astra", "reasoning_effort": "high"}
+  }
+}
+```
+
+Resolve a profile from the task's working directory as follows. If omitted, the profile defaults to `standard`.
+
+```sh
+python3 /path/to/gwitg/scripts/worker_profiles.py light
+```
+
+The resolver returns configured values unchanged and does not check whether the runtime supports them. An invalid configuration or missing profile is an error. Do not silently choose another profile. See [SKILL.md](SKILL.md) for details, including how to pass a parsed judge result to the resolver programmatically.
+
+### Launching a worker
+
+Before spawning, check the current tool's schema and documentation for supported model IDs, reasoning efforts, and context-inheritance options. For example, in a runtime that advertises `gpt-6-luna` and `gpt-6-astra`, built-in `light` and `standard` use `gpt-6-luna`, while `strong` uses `gpt-6-astra`. This mapping depends on the runtime; do not mechanically add a prefix or substitute another setting. Keep the selected profile, resolver values, and established launch ID together and pass them to descendants.
+
+If the spawn tool requires `fork_turns="none"` to set a model or reasoning effort, specify it and pass both resolved settings explicitly. Follow the actual tool contract. When context is not inherited, make the delegation prompt self-contained: state the objective and acceptance criteria, working directory and relevant files, current state and constraints, permitted changes, validation, and expected report. Also provide the selected judge, profile, resolved values, launch ID, and applicable gwitg rules. Never assume the child can read the earlier conversation. If the selected settings cannot be applied, the parent does the work.
+
 ## Recursive Delegation
 
 A subagent may delegate independent subtasks to its own subagents when doing so is useful.
@@ -181,7 +217,7 @@ parent
 └─ implementation
 ```
 
-The same no-polling rule, intervention limits, worker defaults, and conflict-avoidance rules apply recursively.
+Recursive delegation reuses the selected profile name and resolved worker settings. The same no-polling rule, intervention limits, and conflict-avoidance rules apply.
 
 A worker with children integrates their completed results before reporting completion to its parent.
 
@@ -221,9 +257,11 @@ gwitg/
 ├── README.en.md
 ├── SKILL.md
 ├── scripts/
-│   └── decision_model.py
+│   ├── decision_model.py
+│   └── worker_profiles.py
 └── tests/
-    └── test_decision_model.py
+    ├── test_decision_model.py
+    └── test_worker_profiles.py
 ```
 
 - [LICENSE](LICENSE): MIT License

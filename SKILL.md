@@ -1,6 +1,6 @@
 ---
 name: gwitg
-description: Codex agent skill for delegating suitable independent work to parallel 6-luna high subagents without polling or progress monitoring, with limited direct user control through /subagent and an optional external delegation judge.
+description: Codex agent skill for delegating suitable independent work to parallel workers configured by named profiles without polling or progress monitoring, with limited direct user control through /subagent and an optional external delegation judge.
 ---
 
 # gwitg
@@ -9,7 +9,7 @@ This skill is designed specifically for **OpenAI Codex** and its subagent contro
 
 Use subagents for independent work that can be completed without frequent synchronization with the current agent.
 
-The default worker is **6-luna with high reasoning effort**.
+The default worker profile is **standard**.
 
 This policy applies recursively: a subagent that delegates work becomes the parent of its own children and must follow the same rules.
 
@@ -37,13 +37,35 @@ If a correction or constraint makes the original assignment impossible, the suba
 
 ## Default worker configuration
 
-When spawning a worker, use:
+If the user explicitly selects a worker profile for the task, resolve that profile first. Otherwise, when delegation or profile choice is ambiguous, use a valid common judge result's profile recommendation. If no judge recommendation is needed or available, the parent makes the decision and resolves `standard` when no other profile is selected. An invalid result is unavailable as a whole and requires parent judgment; do not treat it as an implicit `standard` recommendation. Keep the selected profile name together with its resolved model and reasoning effort for the duration of the task, and pass both to descendants so recursive delegation reuses the same selection and values without rereading configuration. The built-in profile preserves the existing `6-luna` / `high` behavior. Keep `/fast` at the environment default unless the user changes it.
 
-- model: `6-luna`;
-- reasoning effort: `high`;
-- Fast mode: environment default.
+Do not silently substitute a different model or reasoning effort when a configured profile is unsupported. Follow explicit user instructions or keep the work in the current agent.
 
-If the environment does not support selecting `6-luna` with high reasoning effort, do not silently substitute another worker configuration. Follow explicit user instructions or keep the work in the current agent.
+## Named worker profiles
+
+Worker profiles are names for concrete model and reasoning-effort settings. The built-in profiles are `light`, `standard`, and `strong`; precedence is explicit user selection, a valid common judge recommendation when delegation or profile choice is ambiguous, then `standard`. The built-in `standard` profile preserves the existing `6-luna` / `high` behavior. A judge recommends only a profile name; `/fast` is independent of a profile.
+
+Run the resolver from the task's working directory using its absolute path, as with the delegation-judge resolver. It reads `<project-root>/.gwitg/worker-profiles.json` first, then `~/.config/gwitg/worker-profiles.json` only when the project file is absent. If neither file exists, it uses the built-in settings below. An invalid or unreadable project file is an error, not a reason to fall back to common settings. The selected file replaces the entire profile list; profiles are not merged across project, common, and built-in settings. A custom file must have this shape:
+
+```json
+{
+  "profiles": {
+    "light": {"model": "6-luna", "reasoning_effort": "low"},
+    "standard": {"model": "6-luna", "reasoning_effort": "high"},
+    "strong": {"model": "6-astra", "reasoning_effort": "high"}
+  }
+}
+```
+
+The resolver returns configured model and effort strings unchanged; it does not return the profile name, so the caller must retain that name alongside the returned settings. It does not guarantee that the runtime supports those settings. Invalid JSON, missing settings, or an unknown profile produces an error. A caller can resolve an explicit profile with `python3 <skill-directory>/scripts/worker_profiles.py <profile>`; omitting the argument resolves `standard`. A programmatic caller can pass a parsed common judge result as `judge_result` to `resolve_worker_profile`. An explicit user profile takes precedence; with no explicit profile, a valid positive recommendation resolves its named profile, a valid negative recommendation returns no worker settings, and no judge result resolves `standard`. An invalid common result raises `InvalidJudgeResult` and must be treated as unavailable as a whole so the parent can decide. A valid recommendation whose profile is not configured raises the normal profile-resolution error. Neither case silently selects another profile. Keep the current task in the parent when the resolved settings are unsupported.
+
+## Launching a worker
+
+Check the current spawn tool's accepted model identifiers, reasoning efforts, and context-inheritance options in its exposed schema and parameter documentation before launching. Keep resolver output unchanged. For example, in a runtime that advertises `gpt-6-luna` and `gpt-6-astra` as the corresponding models, built-in `light` and `standard` launch as `gpt-6-luna`, and `strong` as `gpt-6-astra`, with their resolved reasoning efforts. This is a runtime-dependent mapping, not a universal model list. Retain the established launch identifier alongside the selected profile and resolved settings for descendants. Do not infer aliases by adding a prefix or substitute another model when no supported identifier is established.
+
+If the spawn tool requires `fork_turns="none"` to select a model or reasoning effort, set it and pass both settings explicitly. In that runtime, `fork_turns="all"` or its default inherits the parent's configuration and cannot enforce a different worker profile. Follow the current tool contract rather than assuming these parameters exist in every environment. If the selected settings cannot be applied, keep the work in the current agent.
+
+Without inherited history, the delegation prompt must be self-contained: include the objective and acceptance criteria, working directory and relevant files, current state and constraints, permitted changes and validation, and expected report. Also pass the selected judge, profile name, resolved settings, established launch identifier, and applicable gwitg rules so descendants can reuse them without rereading configuration. Do not assume the worker can see earlier user messages or the parent's findings.
 
 ## Decide whether to delegate
 
@@ -96,7 +118,7 @@ Never create or modify the user's setting as part of reading it. If the resolver
 
 Selection does not provision an API connection, install a model, or choose the worker model. Check that the selected judge has an actual callable tool or connection. If it is unavailable or its call fails, report the limitation and judge in the current agent; do not silently substitute the other external judge. Do not invent tool names, API endpoints, or model identifiers.
 
-The delegation judge is distinct from the worker. Keep the existing `6-luna` / `high` worker default regardless of the judge selection.
+The delegation judge is distinct from the worker profile. Resolving the default worker profile does not change according to the judge selection.
 
 The judge may evaluate:
 
@@ -108,9 +130,27 @@ The judge may evaluate:
 
 The judge is advisory. The current agent remains responsible for the final delegation decision.
 
-Do not invoke a judge when delegation is already clearly appropriate or clearly inappropriate.
+Do not invoke a judge when both the delegation decision and profile choice are already clear.
 
 Do not use a judge to monitor a running subagent.
+
+## Common judge result format
+
+Interpret every judge's recommendation through the same three-field result, regardless of the judge or its connection:
+
+```yaml
+delegate: true
+profile: light
+reason: Independent repository search with bounded scope
+```
+
+- `delegate` is required and must be a boolean. `true` recommends delegation; `false` does not.
+- `profile` is required. When `delegate` is `true`, it must be a worker profile name. When `delegate` is `false`, it must be `null`. The name is an identifier to resolve through worker-profile configuration; the judge does not define profiles or choose concrete worker settings.
+- `reason` is required and must be a non-empty short string.
+
+A missing field, wrong value type, empty reason, inconsistent `delegate` and `profile` values, or undefined field makes the result invalid. Do not use only part of an invalid result. Treat it as unavailable and let the parent agent decide. If a profile name cannot be resolved by later configuration, do not silently substitute another profile.
+
+The common result must not contain concrete model identifiers, reasoning effort, or `/fast` state. The parent agent makes the final delegation decision, while profile resolution and worker configuration happen separately. Judge-specific invocation, connection details, and raw response formats are outside the common result; map Clef, Jev, or another judge's response to these fields in that judge's environment.
 
 ## Parallelism
 
@@ -130,11 +170,11 @@ Avoid concurrent edits to the same files or shared mutable state unless responsi
 
 A subagent may spawn its own subagents when its assigned work contains independent subtasks that materially benefit from delegation or parallel execution.
 
-Recursive delegation follows the same gwitg policy as root-level delegation.
+Recursive delegation follows the same gwitg policy and reuses the selected profile name and concrete worker settings resolved for the current task. It does not reread configuration or ask the judge to reselect a profile for the same task.
 
 A subagent that spawns children must:
 
-- use `6-luna` with high reasoning effort by default;
+- use the task's resolved worker model and reasoning effort;
 - delegate only independent, bounded subtasks;
 - prefer parallel execution when dependencies allow it;
 - provide each child enough context to finish independently;
@@ -293,8 +333,8 @@ A user status request allows a lifecycle check, not progress monitoring or paren
 For suitable work:
 
 1. identify independent tasks;
-2. when delegation is genuinely ambiguous, use the judge selected at task start or judge in the parent;
-3. spawn `6-luna` high workers in parallel;
+2. when delegation or profile choice is ambiguous, use the judge selected at task start or judge in the parent; skip the judge when both decisions are clear;
+3. select the explicit user profile first, otherwise use an accepted valid judge recommendation, otherwise use `standard`; resolve the selected profile and spawn workers with its configured model and reasoning effort;
 4. allow those workers to recursively delegate independent subtasks when useful;
 5. continue only independent work in each parent;
 6. avoid progress monitoring and polling; use only permitted lifecycle checks and limited corrections or cancellation;

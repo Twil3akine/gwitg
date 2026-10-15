@@ -55,6 +55,11 @@ class DecisionModelTests(unittest.TestCase):
         self.write_project_config(b"jev\n")
         self.assertEqual(self.read(), "jev")
 
+    def test_project_none_takes_precedence_over_common_value(self):
+        self.write_common_config(b"clef\n")
+        self.write_project_config(b"none\n")
+        self.assertEqual(self.read(), "none")
+
     def test_project_value_takes_precedence_over_common_none(self):
         self.write_common_config(b"none\n")
         self.write_project_config(b"clef\n")
@@ -63,6 +68,10 @@ class DecisionModelTests(unittest.TestCase):
     def test_project_configuration_is_used_when_common_file_is_missing(self):
         self.write_project_config(b"jev\n")
         self.assertEqual(self.read(), "jev")
+
+    def test_common_configuration_is_used_when_project_file_is_missing(self):
+        self.write_common_config(b"clef\n")
+        self.assertEqual(self.read(), "clef")
 
     def test_xdg_config_home_is_ignored(self):
         xdg = self.root / "xdg"
@@ -124,29 +133,36 @@ class DecisionModelTests(unittest.TestCase):
         ):
             self.assertEqual(self.read(), "jev")
 
-    def test_invalid_project_configuration_is_an_error(self):
+    def test_invalid_project_configuration_is_an_error_without_common_fallback(self):
         self.write_common_config(b"clef\n")
         self.write_project_config(b"CLEF\n")
         with self.assertRaises(ValueError):
             self.read()
 
-    def test_common_configuration_error_is_reported_when_project_missing(self):
+    def test_common_configuration_error_is_reported_when_project_is_missing(self):
         self.write_common_config(b"invalid\n")
         with self.assertRaises(ValueError):
             self.read()
 
-    def test_unreadable_common_configuration_is_reported_when_project_missing(self):
-        common_path = self.write_common_config(b"clef\n")
+    def test_unreadable_project_configuration_does_not_fall_back(self):
+        self.write_common_config(b"clef\n")
+        project_path = self.write_project_config(b"jev\n")
         original_read_text = Path.read_text
 
-        def fail_for_common(path, *args, **kwargs):
-            if path == common_path:
+        def fail_for_project(path, *args, **kwargs):
+            if path.resolve() == project_path.resolve():
                 raise PermissionError("denied")
             return original_read_text(path, *args, **kwargs)
 
-        with mock.patch.object(Path, "read_text", fail_for_common):
+        with mock.patch.object(Path, "read_text", fail_for_project):
             with self.assertRaises(PermissionError):
                 self.read()
+
+    def test_invalid_utf8_project_configuration_does_not_fall_back(self):
+        self.write_common_config(b"clef\n")
+        self.write_project_config(b"\xff")
+        with self.assertRaises(UnicodeError):
+            self.read()
 
     def test_invalid_selections_are_rejected(self):
         for value in (b"", b"unknown\n", b"Clef\n", b"clef\njev\n", b"clef # comment\n"):
@@ -155,17 +171,21 @@ class DecisionModelTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.read()
 
-    def test_directory_instead_of_common_config_reports_error(self):
-        (self.home / ".config" / "gwitg" / "decision-model").mkdir(parents=True)
+    def test_directory_instead_of_project_config_reports_error_without_fallback(self):
+        self.write_common_config(b"clef\n")
+        (self.cwd / ".gwitg" / "decision-model").mkdir(parents=True)
         with self.assertRaises(OSError):
             self.read()
 
     def test_separate_reads_observe_configuration_changes(self):
-        path = self.write_common_config(b"clef\n")
-        self.assertEqual(self.read(), "clef")
-        path.write_bytes(b"jev\n")
+        common_path = self.write_common_config(b"clef\n")
+        project_path = self.write_project_config(b"none\n")
+        self.assertEqual(self.read(), "none")
+        project_path.write_bytes(b"jev\n")
         self.assertEqual(self.read(), "jev")
-        path.unlink()
+        project_path.unlink()
+        self.assertEqual(self.read(), "clef")
+        common_path.write_bytes(b"none\n")
         self.assertEqual(self.read(), "none")
 
     def test_invalid_utf8_is_rejected(self):
@@ -208,6 +228,26 @@ class DecisionModelTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual(result.stdout, "")
         self.assertIn("expected exactly one of clef, jev, none", result.stderr)
+
+
+    def test_unreadable_common_configuration_is_reported_when_project_missing(self):
+        common_path = self.write_common_config(b"clef\n")
+        original_read_text = Path.read_text
+
+        def fail_for_common(path, *args, **kwargs):
+            if path == common_path:
+                raise PermissionError("denied")
+            return original_read_text(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "read_text", fail_for_common):
+            with self.assertRaises(PermissionError):
+                self.read()
+
+
+    def test_directory_instead_of_common_config_reports_error(self):
+        (self.home / ".config" / "gwitg" / "decision-model").mkdir(parents=True)
+        with self.assertRaises(OSError):
+            self.read()
 
 
 if __name__ == "__main__":
