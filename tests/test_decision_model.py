@@ -230,5 +230,25 @@ class DecisionModelTests(unittest.TestCase):
         self.assertIn("expected exactly one of clef, jev, none", result.stderr)
 
 
+    def test_unreadable_common_configuration_is_reported_when_project_missing(self):
+        common_path = self.write_common_config(b"clef\n")
+        original_read_text = Path.read_text
+
+        def fail_for_common(path, *args, **kwargs):
+            if path == common_path:
+                raise PermissionError("denied")
+            return original_read_text(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "read_text", fail_for_common):
+            with self.assertRaises(PermissionError):
+                self.read()
+
+
+    def test_directory_instead_of_common_config_reports_error(self):
+        (self.home / ".config" / "gwitg" / "decision-model").mkdir(parents=True)
+        with self.assertRaises(OSError):
+            self.read()
+
+
 if __name__ == "__main__":
     unittest.main()

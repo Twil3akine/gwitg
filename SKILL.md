@@ -1,9 +1,11 @@
 ---
 name: gwitg
-description: Orchestrate suitable independent work with parallel workers configured by named profiles, avoid polling and progress monitoring of running subagents, and preserve limited direct user control through /subagent. Select an optional delegation judge through the external decision-model setting.
+description: Codex agent skill for delegating suitable independent work to parallel workers configured by named profiles without polling or progress monitoring, with limited direct user control through /subagent and an optional external delegation judge.
 ---
 
 # gwitg
+
+This skill is designed specifically for **OpenAI Codex** and its subagent controls. It is not currently intended as a generic cross-agent skill for Claude Code, Cursor, Copilot, or other runtimes.
 
 Use subagents for independent work that can be completed without frequent synchronization with the current agent.
 
@@ -110,7 +112,7 @@ Retain the selection in the task context and reuse it for all delegation judgmen
 
 Never create or modify the user's setting as part of reading it. If the resolver or Python is unavailable, or reading the setting fails, disclose that limitation once and retain `none` for the task; do not retry the resolver for each decision.
 
-- `clef`: use the available Clef delegation-judgment tool or connection (called Clef-flah-q4 in v1.0).
+- `clef`: use the available Clef delegation-judgment tool or connection (called Clef-flash-q4 in v1.0).
 - `jev`: use the available Jev delegation-judgment tool or connection.
 - `none`: make the judgment in the current agent without an external decision model.
 

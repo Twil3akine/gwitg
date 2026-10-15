@@ -1,12 +1,46 @@
+<p align="center">
+  <img src="./assets/gwitg_logo.png" alt="gwitg logo" width="420">
+</p>
+
+<p align="center">
+  <strong>Delegate independent work to subagents without turning the parent agent into a progress monitor.</strong>
+</p>
+
+<p align="center">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://github.com/Twil3akine/gwitg/releases"><img src="https://img.shields.io/github/v/release/Twil3akine/gwitg" alt="GitHub release"></a>
+</p>
+
+<p align="center">
+  <a href="./README.en.md">English</a> | <strong>日本語</strong>
+</p>
+
 # gwitg
 
-`gwitg`は、Codexが独立した作業をサブエージェントに並列で任せるためのAgent Skillです。サブエージェントは、親エージェントから作業を任されて動く別のエージェントです。
+`gwitg`は、**OpenAI Codex向け**に、独立した作業をサブエージェントへ委任し、必要に応じて並列実行するためのAgent Skillです。
 
-基本方針は、**作業を任せたら進捗を監視せず、状態確認のポーリングをしない**ことです。親エージェントは、その間に独立した別の作業を進められます。詳しいルールは[SKILL.md](SKILL.md)に記載しています。
+中心となる考え方は、**作業を任せた後に親エージェントが進捗監視を続けないこと**です。親エージェントは結果を待つ間、別の独立した作業を進めます。
 
-## インストール
+```text
+parent agent
+├─ investigate-api
+├─ tests
+└─ review
 
-利用範囲に合わせて、次のどちらかを選んでください。
+        ↓ completed results
+
+parent integrates and validates
+```
+
+状態確認そのものは禁止しませんが、短い間隔でのポーリングや途中ログを使った進捗監視は行いません。詳しい運用ルールは[SKILL.md](SKILL.md)に定義しています。
+
+## 対応環境
+
+現在の`gwitg`は**OpenAI Codex向け**です。`/subagent`、worker model、reasoning effortなど、Codexのsubagent機構と操作を前提にしています。
+
+Claude Code、Cursor、Copilotなどでの動作は現時点では対応・検証していないため、汎用的なcross-agent skillとしては扱いません。
+
+## Quick Start
 
 ### ユーザー単位で使う
 
@@ -14,80 +48,132 @@
 git clone https://github.com/Twil3akine/gwitg ~/.codex/skills/gwitg
 ```
 
-Codexがユーザー単位で利用するスキルの配置先は、`~/.codex/skills/<skill-name>/SKILL.md`です。
-
 ### 特定のリポジトリだけで使う
 
-対象のリポジトリ内で実行してください。
+対象リポジトリで実行します。
 
 ```sh
 mkdir -p .codex/skills
 git clone https://github.com/Twil3akine/gwitg .codex/skills/gwitg
 ```
 
-## 使い方
-
-Codexに、`gwitg`の使用を明示的に指示します。
+Codexへ明示的に指定する場合は、次のように依頼します。
 
 ```text
 gwitgを使ってこの作業を進めて
 ```
 
-明示的に指示せず、Codexによるスキルの自動選択に任せることもできます。
+スキルの自動選択に任せることもできます。
 
-### 作業の進め方
+## どう動くか
 
-親エージェントは、頻繁なやり取りが不要な独立した作業をサブエージェントに任せます。独立した作業が複数あれば、可能な限り並列で進めます。
+親エージェントは、頻繁な同期が不要で、目的と完了条件を明確にできる作業をサブエージェントへ委任します。
 
-作業で使うprofileをユーザーが明示した場合は、その指定を優先します。明示がなく、委任判断またはprofile選択が曖昧な場合は、有効な共通形式による判断役の推薦profileを使います。それ以外で親が委任を決めたときは既定の`standard`を使います。profile名と解決したモデル・推理レベルを一緒に保持し、再帰委任する子にも渡します。子は同じprofileと解決値を使い、設定を読み直しません。組み込みの`standard`は`6-luna`・`high`です。実行環境で使えない設定を別の値へ黙って置き換えません。
+典型的には次のような作業が対象です。
 
-作業を任せた後も、必要に応じて実行中・完了・失敗などの状態を確認できます。ただし、短い間隔で状態確認を繰り返すポーリングや、途中の出力・ログを使った進捗監視は禁止します。完了通知を待つ操作は許可します。応答がないことや時間がかかっていることだけでは、失敗と判断しません。
+- repository investigation
+- bug investigation
+- well-defined implementation
+- test writing
+- independent code review
+- documentation investigation
+- codebase search
+- self-contained experiments
+- validation against explicit acceptance criteria
 
-実行中に伝えられるのは、誤った前提の訂正、新たに判明した制約、作業の中止に限ります。目的・成果物・作業方針の変更や、通常の追加作業には使いません。訂正や制約により元の依頼を続けられない場合は、サブエージェントが理由を報告して停止します。
+独立した作業が複数あれば、依存関係が許す範囲で並列に実行します。
 
-調査結果には、必要に応じて確認対象、確認日時と情報が示す時点、直接確認した事実か過去の記録か、未確認事項を含めます。時系列が重要な調査では現在の事実と過去の記録を区別し、情報の時点が不明なら不明と書きます。
+作業で使うworker profileをユーザーが明示した場合は、その指定を優先します。明示がなく、委任判断またはprofile選択が曖昧な場合は、有効な共通形式による判断役の推薦profileを使います。それ以外で親が委任を決めたときは既定の`standard`を使います。profile名と解決したモデル・推理レベルを一緒に保持し、再帰委任する子にも渡します。子は同じprofileと解決値を使い、設定を読み直しません。組み込みの`standard`は`6-luna`・`high`です。実行環境で使えない設定を別の値へ黙って置き換えません。 `/fast`は環境の既定値を使います。
 
-サブエージェントも、必要に応じて別のサブエージェントに作業を任せられます。その場合も、同じ設定と監視しないルールを適用します。
+### 実行中のルール
 
-委任するか、使うprofileを決めにくい場合は、次の設定で判断役を選べます。委任とprofileの両方が明らかな作業では外部モデルを呼びません。
+作業を任せた後も、必要であれば`running`、`completed`、`failed`などの状態を確認できます。
 
-### 判断役を選ぶ
+ただし、次のような監視は行いません。
 
-最初にプロジェクトルートの`.gwitg/decision-model`を読みます。このファイルがない場合だけ、共通設定の`~/.config/gwitg/decision-model`を読みます。どちらもなければ`none`を使います。
+- 短い間隔で状態確認を繰り返す
+- sleepとstatus確認を交互に行う
+- 途中ログやpartial outputを確認する
+- 遅いという理由だけで再起動・差し替え・モデル変更を行う
 
-プロジェクトルートは、作業開始ディレクトリが属するGitリポジトリのルートです。Git管理外の場合や、Gitを利用できない・ルートを取得できない場合は、作業開始ディレクトリを使います。プロジェクト設定が`none`の場合も、共通設定より優先されます。
+完了通知を待つ操作は許可されます。
 
-ファイルに書く値は、次のいずれか1つです。
+### 実行中に伝えられること
 
-| 値 | 委任判断の担当 |
+親エージェントから実行中のsubagentへ追加で伝えられるのは、次の3種類です。
+
+- 誤った前提の訂正
+- 新たに判明した制約
+- 作業の中止
+
+目的・成果物・作業方針を変える通常の追加指示には使いません。
+
+訂正や制約により元の依頼を続けられなくなった場合、subagentは理由を報告して停止します。
+
+## Delegation Judge
+
+委任するか、使うprofileを決めにくい場合に限り、外部のdecision modelを判断役として利用できます。委任とprofileの両方が明らかな作業では外部モデルを呼びません。
+
+利用できる値は次の3つです。
+
+| 値 | 判断役 |
 | --- | --- |
 | `clef` | 利用環境のClef判断ツール |
 | `jev` | 利用環境のJev判断ツール |
 | `none` | 親エージェント自身 |
 
-例えば、Clefを使う場合は次を実行します。すでに設定がある場合は、このコマンドで上書きされます。
+判断役の優先順位は次のとおりです。
 
-```sh
-gwitg_config_dir="$HOME/.config/gwitg"
-mkdir -p "$gwitg_config_dir"
-printf '%s\n' clef > "$gwitg_config_dir/decision-model"
+```text
+1. ユーザーがその作業で明示した指定
+2. <project-root>/.gwitg/decision-model
+3. ~/.config/gwitg/decision-model
+4. none
 ```
 
-プロジェクトごとに共通設定を上書きする場合は、プロジェクトルートの`.gwitg/decision-model`に同じ値を書きます。
+プロジェクト設定が存在する場合は、ユーザー共通設定より優先されます。
 
-Jevを使う場合は`clef`を`jev`に、外部の判断役を使わない場合は`none`に変更します。設定ファイルがない場合の既定値も`none`です。ユーザーがその作業で判断役を明示した場合は、ファイルより明示指定を優先します。
+### 共通設定
 
-設定ファイルは作業開始時に一度だけ読み、その作業中は同じ判断役を使います。サブエージェントにも選択結果を渡すため、同じ作業で読み取りを繰り返しません。ファイルの変更は、次の別の作業を開始したときに反映されます。作業の続きや状況確認は、新しい作業として扱いません。作業中にユーザーが判断役を明示した場合は、その指定を優先します。
+例えば、通常はClefを使う場合は次のように設定します。
 
-常駐プロセスは不要で、選択結果を別の作業へ持ち越しません。設定ファイルを読む処理は、ユーザーの設定を変更しません。
+```sh
+mkdir -p "$HOME/.config/gwitg"
+printf '%s\n' clef > "$HOME/.config/gwitg/decision-model"
+```
 
-空ファイル、不正な値、読み取り失敗は作業開始時に知らせ、その作業では`none`として親エージェントが判断します。プロジェクト設定の読み取りに失敗しても、共通設定へ切り替えません。判断のたびに読み取りを再試行しません。選んだ判断ツールが利用できない場合も、その事情を伝えて親エージェントが判断し、別の外部モデルへ無断で切り替えません。
+### プロジェクトごとの上書き
 
-この設定はClefやJevへの接続を用意するものではありません。対応するツールや接続が利用環境に必要です。workerの設定は別途worker profileから解決します。組み込みの`standard`は従来の`6-luna`・`high`を保ち、カスタム設定がある場合はその値を使います。
+特定のリポジトリだけ別の判断役を使う場合は、プロジェクトルートに設定します。
+
+```sh
+mkdir -p .gwitg
+printf '%s\n' jev > .gwitg/decision-model
+```
+
+外部の判断役を使わない場合は`none`を指定します。
+
+```sh
+printf '%s\n' none > .gwitg/decision-model
+```
+
+設定ファイルは作業開始時に一度だけ読み、その作業中は同じ判断役を利用します。子エージェントにも選択結果を渡すため、同じ作業の中で設定ファイルを繰り返し読みません。
+
+設定値が不正、読み取り不能、または選択した外部判断ツールを利用できない場合は、その事実を伝えて親エージェントが判断します。ClefからJev、JevからClefへ無断で切り替えることはありません。
+
+この設定は外部モデルへの接続自体を用意するものではありません。ClefやJevを実際に呼び出せるツールや接続は、利用環境側に必要です。
+
+設定解決には次のスクリプトを使います。
+
+```sh
+python3 /path/to/gwitg/scripts/decision_model.py
+```
+
+スキルのディレクトリへ移動せず、作業対象のディレクトリから絶対パスで実行します。
 
 ### 判断役の共通出力
 
-Clef、Jev、または将来の判断役の結果は、共通形式に読み替えて扱います。形式には常に次の3項目を含めます。
+判断役の結果は、次の3項目を持つ共通形式に読み替えます。
 
 ```yaml
 delegate: true
@@ -95,27 +181,15 @@ profile: light
 reason: Independent repository search with bounded scope
 ```
 
-`delegate`は必須の真偽値、`profile`は必須項目、`reason`は必須の短い説明です。`delegate: true`の場合、`profile`にはworker profile名を指定し、`delegate: false`の場合は`null`にします。profile名は設定済みprofileを参照する名前であり、設定にない名前は後続処理で解決できません。
+`delegate`は必須の真偽値です。委任する場合の`profile`は設定済みworker profile名、委任しない場合は`null`です。`reason`には空でない短い説明を入れます。項目の欠落、型違い、空の理由、委任とprofileの矛盾、未定義の項目があれば結果全体を無効とし、親エージェントが判断します。無効な結果から一部の値だけを採用しません。
 
-形式の欠落、型違い、空の理由、または委任の有無とprofileの組み合わせが不正な結果は無効として扱います。無効な結果から一部の値だけを採用せず、判断役の結果は利用できないものとして親エージェントが判断します。未定義の項目も受け付けません。
+判断役は具体的なモデル名、推理レベル、`/fast`の状態を指定しません。親エージェントが最終的な委任を決め、profileの解決とworker設定は別に行います。ClefやJevの呼び出し方は各環境に委ねます。
 
-判断役は具体的なモデル名、推理レベル、`/fast`の状態を出力しません。これらはworker profileの設定と実行環境に属します。ClefやJevの接続方法や呼び出し方も共通形式には含めず、各判断役の利用環境に委ねます。親エージェントが最終的な委任を決めます。
+## Worker Profiles
 
-設定の読み取りにはPython 3を使います。作業対象のディレクトリから、スキル配置先のスクリプトを絶対パスで指定してください。スキルの配置先に移動すると、その場所を基準にプロジェクトを探してしまいます。
+worker profileは、workerのモデルと推理レベルをまとめた名前です。組み込みprofileは`light`、`standard`、`strong`です。既定値は`standard`で、従来の`6-luna`・`high`を保ちます。判断役は具体的な設定ではなくprofile名だけを推薦します。`/fast`はprofileとは別の設定です。
 
-```sh
-python3 /path/to/gwitg/scripts/decision_model.py
-```
-
-Python 3や読み取りスクリプトを利用できない場合は、その事情を伝えて親エージェントが判断します。
-
-### worker profile
-
-worker profileは、作業者のモデルと推理レベルをまとめた名前です。初期プロファイルは`light`、`standard`、`strong`です。選択の優先順位は、ユーザーが明示したprofile、委任またはprofile選択が曖昧な場合に得た有効な共通形式の推薦profile、既定の`standard`です。組み込みの`standard`は従来の`6-luna`・`high`を保ちます。判断役はprofile名だけを推薦し、具体的な設定はworker profileから解決します。`/fast`はprofileとは別の設定です。
-
-親エージェントは、選んだprofile名とresolverが返すモデル・推理レベルを組にして作業中保持し、子へ渡します。再帰委任でもこの組をそのまま引き継ぎます。明示されたprofileや有効な推薦profileを解決できない場合はエラーとして扱い、別のprofileへ置き換えません。共通形式が無効なら結果全体を利用せず、親エージェントが判断します。`delegate: false`はprofileを解決せず、親エージェントが最終判断します。有効な推薦profileの設定を読み込めても、実行環境がそのモデルや推理レベルを実際に利用できるかはresolverでは保証できません。利用できないと分かった場合は設定を置き換えずに委任を中止するか、親エージェント自身が作業します。
-
-profileはプロジェクト設定`.gwitg/worker-profiles.json`、または共通設定`~/.config/gwitg/worker-profiles.json`で変更できます。プロジェクト設定があればそちらを使い、ない場合だけ共通設定を使います。どちらもなければ次の組み込み設定を使います。プロジェクト設定が不正な場合や読み取れない場合はエラーとし、共通設定へ切り替えません。
+profile設定はプロジェクトルートの`.gwitg/worker-profiles.json`を先に読み、存在しない場合のみ共通設定`~/.config/gwitg/worker-profiles.json`を読みます。どちらもなければ組み込み設定を使います。採用した設定ファイルの一覧全体を使い、複数設定を合成しません。プロジェクトファイルが不正・読み取り不能な場合はエラーとし、共通設定へ切り替えません。
 
 ```json
 {
@@ -127,40 +201,74 @@ profileはプロジェクト設定`.gwitg/worker-profiles.json`、または共�
 }
 ```
 
-採用した設定ファイルのprofile一覧をそのまま使い、プロジェクト設定・共通設定・組み込み設定の一覧を合成しません。各profileには`model`と`reasoning_effort`を指定してください。指定された値はそのまま返します。利用できない設定を別のモデルや推理レベルへ置き換えません。JSONや設定項目が不正な場合、または選択したprofileが存在しない場合はエラーになります。
-
-選んだprofileの具体的な設定を確認するには、次のコマンドにprofile名を渡します。たとえば判断役の有効な推薦が`light`で、親エージェントが採用した場合は`light`を指定します。引数を省略すると`standard`を使います。
+選んだprofileの設定は、作業対象ディレクトリから次のように解決できます。引数を省略すると`standard`を使います。
 
 ```sh
 python3 /path/to/gwitg/scripts/worker_profiles.py light
 ```
 
-プログラムから共通形式を扱う場合は、解析済みの辞書を`resolve_worker_profile(judge_result=...)`へ渡せます。ユーザーがprofileを明示したときは、そのprofile引数を優先し、判断役の結果は参照しません。有効な`delegate: false`ならworker設定を解決せず、無効な結果は`InvalidJudgeResult`、有効でも未設定のprofile名は通常のprofile解決エラーになります。どちらも既定profileへ黙って切り替えません。
+resolverは設定値をそのまま返し、実行環境で利用できるかは確認しません。明示profileや有効な推薦profileが存在しない場合、または設定が不正な場合はエラーとして扱い、別profileへ黙って切り替えません。プログラムから共通形式を渡す方法など、詳細は[SKILL.md](SKILL.md)を参照してください。
 
-### workerの起動
+### Workerの起動
 
-起動時は、利用中のツールのスキーマと引数の説明で、受け付けるモデルIDと推理レベルを確認します。同じモデルのIDとして`gpt-6-luna`と`gpt-6-astra`が示されている環境では、組み込みの`light`と`standard`は`gpt-6-luna`、`strong`は`gpt-6-astra`を使います。この対応は環境によって異なります。接頭辞を機械的に足したり、別のモデルへ置き換えたりしません。resolverが返した値は保持し、起動に使うIDも子へ渡します。
+起動前に、利用中のspawnツールが受け付けるモデルID、推理レベル、会話履歴の引き継ぎ方を確認します。例えばツールが`gpt-6-luna`と`gpt-6-astra`を対応IDとして示す環境では、組み込みの`light`と`standard`は`gpt-6-luna`、`strong`は`gpt-6-astra`で起動します。この対応は実行環境に依存します。IDに接頭辞を機械的に足したり、別の値へ置き換えたりしません。選択したprofile名、resolverの値、起動IDを子にも引き継ぎます。
 
-モデルや推理レベルの指定に`fork_turns="none"`が必要なツールでは、この値と両方の設定を明示します。その環境で`fork_turns="all"`や既定値を使うと、親の設定を引き継ぐためです。実際のツール仕様に従い、選んだ設定で起動できない場合は親が作業します。
+モデルや推理レベルを指定するために`fork_turns="none"`が必要なツールでは、その値と両方の設定を明示します。会話履歴を渡さない場合、作業指示には目的と完了条件、作業ディレクトリ、関連ファイル、現状と制約、変更可能な範囲、検証方法、報告内容を含めます。さらに選択済みの判断役とprofile、解決値、起動ID、適用するgwitgルールを渡し、子が過去の会話を読めることを前提にしません。選んだ設定で起動できない場合は、親が作業します。
 
-会話履歴を引き継がない場合は、目的と完了条件、作業ディレクトリと関連ファイル、現状と制約、変更可能な範囲、検証方法、報告内容を指示に含めます。選択済みの判断役、profile名、解決した設定、起動用ID、適用するgwitgのルールも渡します。子が過去の会話を読めることを前提にしません。
+## Recursive Delegation
 
-### 実行中のサブエージェントを操作する
+subagentも、割り当てられた作業の中に独立したsubtaskがある場合は、さらにsubagentへ委任できます。
 
-ユーザーが実行中のサブエージェントを確認・操作する場合は、`/subagent`を直接使ってください。`gwitg`のルールで認める操作は、次の4種類です。
+```text
+parent
+├─ investigate-api
+│  ├─ inspect-cache
+│  └─ inspect-tests
+└─ implementation
+```
+
+再帰的に委任する場合も、選択済みのprofile名と解決した設定を引き継ぎ、同じno-pollingルールと介入制限を適用します。
+
+子を持つsubagentは、子の完了結果を統合してから親へ完了報告します。
+
+## `/subagent`によるユーザー操作
+
+ユーザーは`/subagent`から実行中のsubagentを直接確認・操作できます。
+
+gwitgで許可する操作は次の4種類です。
 
 1. 現在の状態を確認する
 2. スレッドを開く
 3. `/fast`を有効・無効にする
 4. モデルまたは推理レベルを変更する
 
-親エージェントは、ポーリングにならない状態確認と、上記の訂正・制約追加・中止を伝えられます。スレッド閲覧、`/fast`やモデル・推理レベルの変更は代行しません。実行中のエージェントの差し替えや、中止した作業の再開、目的・作業方針を変える追加指示は、これらの例外に含めません。
+親エージェントは、スレッドを開く操作や`/fast`・model・reasoning effortの変更を代理しません。
 
-## ファイル構成
+実行中workerの差し替え、目的変更、作業方針変更はこれらの例外に含まれません。
+
+## Investigation Reports
+
+時系列や情報の鮮度が重要な調査では、必要に応じて次を区別して報告します。
+
+- 何を確認したか
+- いつ確認したか
+- 証拠がどの時点の情報を示しているか
+- 現在状態を直接確認した事実か、過去の文書・ログか
+- 未確認事項と制約
+
+今日読んだ文書でも、その内容が今日の状態を示しているとは限りません。情報の時点が分からない場合は推測せず、不明とします。
+
+単純なコード調査では、必要な項目だけを報告し、長い固定テンプレートは要求しません。
+
+## Repository Layout
 
 ```text
 gwitg/
+├── assets/
+│   └── gwitg_logo.png
+├── LICENSE
 ├── README.md
+├── README.en.md
 ├── SKILL.md
 ├── scripts/
 │   ├── decision_model.py
@@ -170,16 +278,21 @@ gwitg/
     └── test_worker_profiles.py
 ```
 
-[SKILL.md](SKILL.md)に、エージェントが従う運用ルールを定義しています。
+- [LICENSE](LICENSE): MIT License
+- [SKILL.md](SKILL.md): エージェントが従う運用ルール
+- [scripts/decision_model.py](scripts/decision_model.py): decision model設定の解決
+- [tests/test_decision_model.py](tests/test_decision_model.py): 設定解決のテスト
 
-## 設定読み取りのテスト
+## Test
 
 ```sh
 python3 -m unittest discover -s tests -v
 ```
 
-## 参考資料
+## Links
 
+- [Releases](https://github.com/Twil3akine/gwitg/releases)
+- [Issues](https://github.com/Twil3akine/gwitg/issues)
 - [OpenAI: Skills](https://developers.openai.com/api/docs/guides/tools-skills)
 - [OpenAI: Build skills](https://developers.openai.com/plugins/build/skills)
 - [OpenAI: Multi-agent](https://developers.openai.com/api/docs/guides/responses-multi-agent)
