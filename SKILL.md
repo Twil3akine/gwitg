@@ -11,13 +11,13 @@ Use subagents for independent work that can be completed without frequent synchr
 
 ## Roles and ownership
 
-The current agent coordinating the user's task is the **Admin**: it owns the overall goal, scope, constraints, integration, and final response. It decides whether to work directly, delegate execution to a **Worker**, consult an **Author**, continue, stop, or return a decision to the user. A delegated agent does not inherit the overall Admin role merely because it is a parent of its own children.
+The current session's agent is the **Admin**: it owns the overall goal, scope, constraints, integration, and final response. It decides whether to work directly, delegate execution to a **Worker**, consult an **Author**, continue, stop, or return a decision to the user. A delegated agent does not inherit the overall Admin role merely because it is a parent of its own children.
 
 - **Admin — overall owner and final decision-maker.** The Admin evaluates all delegated results, integrates useful parts, and remains accountable for the outcome. It may accept, adapt, or reject an Author's advice.
 - **Worker — execution role.** A Worker performs a bounded assignment such as implementation, investigation, testing, or review, and reports results, evidence, blockers, uncertainties, and risks. It does not change the user's goal or take over overall task ownership.
 - **Author — advisory role.** An Author helps the Admin reason about design, alternatives, assumptions, trade-offs, risks, and longer-term effects. Its output is advice for the Admin, not an instruction to execute. It does not own the task, decide for the Admin, or send advice directly to a Worker or the user.
 
-These are roles, not model names or fixed model assignments. Select a supported model and reasoning effort for each delegation based on the work and available runtime. Worker profiles configure Worker model/effort; they do not define the Admin or Author roles, and no specific model is reserved for Author.
+These are roles, not model names. The Admin uses the model and reasoning effort of the current session. The default Author configuration is **6.1-sol with medium reasoning effort**. A task may use at most one Author agent; this is a role-level cap, not a requirement to consult an Author. Workers have no fixed count limit: launch as many as useful for independent bounded work, subject to the runtime's global concurrency limit. Worker profiles configure Worker model/effort; they do not define the Admin or Author roles. Select supported settings for each delegation. Do not silently substitute a different model or effort if the Author default is unsupported; the Admin should handle the reasoning directly or report the runtime limitation.
 
 Use a Worker directly for clear, bounded execution. Consult an Author when the Admin cannot confidently choose among consequential options or when an independent design perspective is especially valuable; do not call one for every task. A request to an Author should ask for judgment material, not implementation. If an Author uses recursive delegation to research its advice, its final responsibility remains an advisory response to the Admin.
 
@@ -364,7 +364,7 @@ For suitable work:
 1. identify independent work and decide whether the Admin can proceed, should consult an Author, or should return a decision to the user;
 2. when delegation or profile choice is ambiguous, use the judge selected at task start or judge in the parent; skip the judge when both decisions are clear;
 3. select the explicit user Worker profile first, otherwise use an accepted valid judge recommendation, otherwise use `standard`; resolve the profile and spawn Workers with its configured model and reasoning effort;
-4. when consulting an Author, request analysis or advice and select supported model/effort settings suitable for that advisory work;
+4. when consulting an Author, request analysis or advice and use the default **6.1-sol / medium** configuration, unless the user specifies another supported configuration;
 5. let Workers and Authors recursively delegate independent subtasks when useful, while preserving each outer role and responsibility;
 6. continue only independent work in each parent;
 7. avoid progress monitoring and polling; use only permitted lifecycle checks and limited corrections or cancellation;
