@@ -1,6 +1,6 @@
 ---
 name: gwitg
-description: Codex agent skill for delegating suitable independent work to parallel workers configured by named profiles without polling or progress monitoring, with limited direct user control through /subagent and an optional external delegation judge.
+description: Codex agent skill for Admin-led delegation to execution Workers and advisory Authors, with configurable worker profiles, recursive delegation, no progress polling, and optional decision-model advice.
 ---
 
 # gwitg
@@ -8,6 +8,26 @@ description: Codex agent skill for delegating suitable independent work to paral
 This skill is designed specifically for **OpenAI Codex** and its subagent controls. It is not currently intended as a generic cross-agent skill for Claude Code, Cursor, Copilot, or other runtimes.
 
 Use subagents for independent work that can be completed without frequent synchronization with the current agent.
+
+## Roles and ownership
+
+The current agent coordinating the user's task is the **Admin**: it owns the overall goal, scope, constraints, integration, and final response. It decides whether to work directly, delegate execution to a **Worker**, consult an **Author**, continue, stop, or return a decision to the user. A delegated agent does not inherit the overall Admin role merely because it is a parent of its own children.
+
+- **Admin — overall owner and final decision-maker.** The Admin evaluates all delegated results, integrates useful parts, and remains accountable for the outcome. It may accept, adapt, or reject an Author's advice.
+- **Worker — execution role.** A Worker performs a bounded assignment such as implementation, investigation, testing, or review, and reports results, evidence, blockers, uncertainties, and risks. It does not change the user's goal or take over overall task ownership.
+- **Author — advisory role.** An Author helps the Admin reason about design, alternatives, assumptions, trade-offs, risks, and longer-term effects. Its output is advice for the Admin, not an instruction to execute. It does not own the task, decide for the Admin, or send advice directly to a Worker or the user.
+
+These are roles, not model names or fixed model assignments. Select a supported model and reasoning effort for each delegation based on the work and available runtime. Worker profiles configure Worker model/effort; they do not define the Admin or Author roles, and no specific model is reserved for Author.
+
+Use a Worker directly for clear, bounded execution. Consult an Author when the Admin cannot confidently choose among consequential options or when an independent design perspective is especially valuable; do not call one for every task. A request to an Author should ask for judgment material, not implementation. If an Author uses recursive delegation to research its advice, its final responsibility remains an advisory response to the Admin.
+
+The normal route is Admin → Worker → Admin for execution, or Admin → Author → Admin → (optional) Worker for advice followed by execution. Author advice never flows automatically to a Worker: the Admin first decides whether to adopt, adapt, reject, or escalate it.
+
+The Admin may return a question to the user even when an Author has made a recommendation. Return it when the choice depends on the user's values or intent, materially changes the goal or scope or an explicit constraint, weakens a security condition, has significant irreversible consequences, or remains too uncertain for the Admin to decide responsibly. When a safe improvement preserves the goal and constraints, the Admin may decide and proceed without asking.
+
+An optional decision model is also advisory. When the next action is genuinely unclear, the Admin may ask the selected judge to consider continuing directly, consulting an Author, or returning a decision to the user. Its recommendation informs the Admin; it cannot override the Admin's judgment or make the final user-escalation decision. Do not call it for routine, clear choices.
+
+The outer user request need not prescribe the number of agents or reproduce this internal workflow. The Admin chooses whether and how to delegate under the task's goal, scope, and constraints.
 
 The default worker profile is **standard**.
 
@@ -126,7 +146,8 @@ The judge may evaluate:
 - whether the necessary context can be packaged into one prompt;
 - whether parallel execution is safe;
 - whether file or state conflicts are likely;
-- whether the task should remain in the current agent.
+- whether the task should remain in the current agent;
+- when the Admin is genuinely uncertain, whether the next step should be direct continuation, Author consultation, or a user decision.
 
 The judge is advisory. The current agent remains responsible for the final delegation decision.
 
@@ -150,7 +171,7 @@ reason: Independent repository search with bounded scope
 
 A missing field, wrong value type, empty reason, inconsistent `delegate` and `profile` values, or undefined field makes the result invalid. Do not use only part of an invalid result. Treat it as unavailable and let the parent agent decide. If a profile name cannot be resolved by later configuration, do not silently substitute another profile.
 
-The common result must not contain concrete model identifiers, reasoning effort, or `/fast` state. The parent agent makes the final delegation decision, while profile resolution and worker configuration happen separately. Judge-specific invocation, connection details, and raw response formats are outside the common result; map Clef, Jev, or another judge's response to these fields in that judge's environment.
+The common result must not contain concrete model identifiers, reasoning effort, or `/fast` state. The parent agent makes the final delegation decision, while profile resolution and worker configuration happen separately. This three-field schema applies to delegation/profile recommendations; it does not constrain separate advisory input about whether the Admin should continue, consult an Author, or return a choice to the user. Such advice remains non-binding. Judge-specific invocation, connection details, and raw response formats are outside the common result; map Clef, Jev, or another judge's response to these fields in that judge's environment.
 
 ## Parallelism
 
@@ -328,15 +349,24 @@ Apply these rules in this order:
 
 A user status request allows a lifecycle check, not progress monitoring or parent-mediated reconfiguration.
 
+## Role examples
+
+- **Simple execution:** Admin → Worker → Admin.
+- **Design uncertainty:** Admin → Author → Admin → optional Worker.
+- **Partial adoption:** Admin → Author → Admin adapts the proposal → Worker → Admin.
+- **User decision needed:** Admin → Author → Admin → user.
+- **Decision-model advice:** Admin → selected judge → Admin decides whether to continue, consult an Author, or ask the user.
+
 ## Normal flow
 
 For suitable work:
 
-1. identify independent tasks;
+1. identify independent work and decide whether the Admin can proceed, should consult an Author, or should return a decision to the user;
 2. when delegation or profile choice is ambiguous, use the judge selected at task start or judge in the parent; skip the judge when both decisions are clear;
-3. select the explicit user profile first, otherwise use an accepted valid judge recommendation, otherwise use `standard`; resolve the selected profile and spawn workers with its configured model and reasoning effort;
-4. allow those workers to recursively delegate independent subtasks when useful;
-5. continue only independent work in each parent;
-6. avoid progress monitoring and polling; use only permitted lifecycle checks and limited corrections or cancellation;
-7. let the user directly use `/subagent` for the limited permitted controls;
-8. integrate results only after completion.
+3. select the explicit user Worker profile first, otherwise use an accepted valid judge recommendation, otherwise use `standard`; resolve the profile and spawn Workers with its configured model and reasoning effort;
+4. when consulting an Author, request analysis or advice and select supported model/effort settings suitable for that advisory work;
+5. let Workers and Authors recursively delegate independent subtasks when useful, while preserving each outer role and responsibility;
+6. continue only independent work in each parent;
+7. avoid progress monitoring and polling; use only permitted lifecycle checks and limited corrections or cancellation;
+8. let the user directly use `/subagent` for the limited permitted controls;
+9. evaluate and integrate completed results; the Admin decides what to adopt and whether user input is needed.
