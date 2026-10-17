@@ -1,6 +1,6 @@
 ---
 name: gwitg
-description: Codex agent skill for Admin-led delegation to execution Workers and advisory Authors, with configurable worker profiles, recursive delegation, no progress polling, and optional decision-model advice.
+description: Codex agent skill for Admin-led delegation to Workers fixed at 6-luna/high and advisory Authors, with recursive delegation, no progress polling, and optional decision-model advice.
 ---
 
 # gwitg
@@ -29,7 +29,7 @@ An optional decision model is also advisory. When the next action is genuinely u
 
 The outer user request need not prescribe the number of agents or reproduce this internal workflow. The Admin chooses whether and how to delegate under the task's goal, scope, and constraints.
 
-The default worker profile is **standard**.
+Worker model and reasoning effort are fixed to **6-luna / high** as described below.
 
 This policy applies recursively: a subagent that delegates work becomes the parent of its own children and must follow the same rules.
 
@@ -63,7 +63,7 @@ Every Worker uses:
 - reasoning effort: `high`;
 - `/fast`: environment default unless the user changes it.
 
-This is fixed Worker configuration, not a selectable profile. Do not let user profile settings or judge recommendations change the Worker model or reasoning effort. If the runtime cannot launch `6-luna` with high reasoning effort, do not substitute another configuration; keep the work in the current agent.
+This is fixed Worker configuration, not a selectable profile. No per-task preference, configuration file, or judge recommendation may change the Worker model or reasoning effort. If the runtime cannot launch `6-luna` with high reasoning effort, do not substitute another configuration; keep the work in the current agent.
 
 ## Launching a worker
 
