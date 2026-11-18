@@ -27,30 +27,17 @@ Place this directory wherever the agent runtime loads Agent Skills. For reposito
 
 ## Model settings
 
-Worker and Author model and reasoning settings are fixed per runtime, not selected per task. Built-in defaults are Codex-native Worker `6-luna` / `high`, Codex-native Author `6.1-sol` / `medium`, and Codex CLI Worker `gpt-6-luna` / `high`. There is no built-in Codex CLI Author. Configure other runtimes in the project `.gwitg/models.json` or user `~/.config/gwitg/models.json` file as needed. A runtime may specify either role or both; an omitted role uses its built-in default when available and is otherwise unavailable.
+Built-in defaults are listed below. The Admin uses the current session's model. For Claude Code's Agent tool, specify the model using its `sonnet` / `opus` alias and reasoning effort with the `effort` parameter. In a Claude-only subscription environment, Opus 5.5 / medium is a recommended Admin model.
 
-```json
-{
-  "runtimes": {
-    "codex-cli": {
-      "worker": {"model": "gpt-6-luna", "reasoning_effort": "high"}
-    }
-  }
-}
-```
-
-The resolver returns JSON with `status: "resolved"` and the settings (exit 0), or `status: "unavailable"` (exit 1); invalid arguments or configuration produce a diagnostic on stderr and exit 2. See [SKILL.md](SKILL.md) for the schema, precedence, validation, and invocation. The resolver uses only the Python standard library.
+| Launch route | Worker | Author |
+| --- | --- | --- |
+| `codex-native` | `6-luna` / `high` | `6.2-sol` / `high` |
+| `codex-cli` (another runtime launches `codex exec`) | `gpt-6-luna` / `high` | `gpt-6.2-sol` / `high` |
+| `claude-code` (Claude Code native subagent) | `claude-sonnet-5-5` / `medium` | `claude-opus-5-5` / `high` |
 
 ## Runtime launch methods
 
-Choose the runtime name from the route used to launch the delegated agent: for example, `codex-native` for native Codex delegation and `codex-cli` when another runtime launches `codex exec`. Do not base it on where the Admin runs. For CLI launches, configure permissions, approval behavior, background execution, and lifecycle notifications for that environment. In other runtimes, use supported launch, status, and cancellation features; do not invent commands or feature names.
-
-## Validation
-
-```sh
-python3 -m unittest discover -s tests -v
-git diff --check
-```
+Choose the runtime name from the route used to launch the delegated agent, not where the Admin runs. Configuration is read from `<git-root>/.gwitg/models.json` first, then `~/.config/gwitg/models.json` only if the first file is absent. Outside a Git repository, use the starting directory. The selected file replaces the other file. Under `runtimes`, specify a runtime name and `worker` and/or `author`, each with `model` and `reasoning_effort`. Either role may be omitted; an omitted role uses its built-in default when available. Invalid, unreadable, or uninterpretable settings do not silently fall back to another file or defaults. If a role cannot be determined, it is unavailable; the Admin works directly and does not use an Author. See [SKILL.md](SKILL.md) for details.
 
 ## Repository layout
 
@@ -60,14 +47,10 @@ gwitg/
 ├── LICENSE
 ├── README.md
 ├── README.en.md
-├── SKILL.md
-├── scripts/resolve_models.py
-└── tests/test_resolve_models.py
+└── SKILL.md
 ```
 
-- [SKILL.md](SKILL.md): orchestration policy and runtime reference
-- [scripts/resolve_models.py](scripts/resolve_models.py): runtime model settings resolver
-- [tests/test_resolve_models.py](tests/test_resolve_models.py): resolver tests
+- [SKILL.md](SKILL.md): delegation policy, model settings, and runtime reference
 
 ## Links
 
